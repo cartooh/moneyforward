@@ -300,7 +300,7 @@ parser_user_asset_acts.add_argument('--is_continuous', type=int, choices=[0, 1])
 parser_user_asset_acts.add_argument('--select_category', type=int) # select large category id
 parser_user_asset_acts.add_argument('--base_date', type=str) # 集計日基準？
 parser_user_asset_acts.add_argument('--keyword', type=str)
-user_asset_acts_list_header = 'id is_transfer is_income updated_at content amount large_category_id large_category middle_category_id middle_category account.service.service_name sub_account.sub_type sub_account.sub_name'.split()
+user_asset_acts_list_header = 'id is_transfer is_income is_target updated_at content amount large_category_id large_category middle_category_id middle_category account.service.service_name sub_account.sub_type sub_account.sub_name'.split()
 parser_user_asset_acts.add_argument('--list_header', type=str, nargs='+', default=user_asset_acts_list_header)
 parser_user_asset_acts.set_defaults(func=get_user_asset_acts)
 
