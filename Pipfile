@@ -10,6 +10,10 @@ selenium = "*"
 keyring = "*"
 requests = "*"
 pandas = "*"
+python-dateutil = "*"
+sqlalchemy = "*"
+beautifulsoup4 = "*"
+tqdm = "*"
 
 [dev-packages]
 
