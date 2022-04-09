@@ -14,7 +14,7 @@ import keyring
 import requests
 import chromedriver_binary
 from selenium import webdriver
-
+from selenium.webdriver.common.by import By
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-s', '--service', default='moneyforward')
@@ -35,11 +35,11 @@ driver = webdriver.Chrome(options=options)
 
 driver.get('https://id.moneyforward.com/sign_in/email')
 
-text_box = driver.find_element_by_name("mfid_user[email]")
+text_box = driver.find_element(by=By.NAME, value="mfid_user[email]")
 text_box.send_keys(username)
 text_box.submit()
 
-text_box = driver.find_element_by_name("mfid_user[password]")
+text_box = driver.find_element(by=By.NAME, value="mfid_user[password]")
 text_box.send_keys(password)
 text_box.submit()
 
