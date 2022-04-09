@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 chromedriver-binary = "*"
+chromedriver-binary-auto = "*"
 selenium = "*"
 keyring = "*"
 requests = "*"
