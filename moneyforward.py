@@ -577,17 +577,21 @@ def update_disable_transfer(s, args):
     for id_ in ids:
         request_update_change_type(s, csrf_token, id_, 'disable_transfer')
 
+def search_category_sub(s, cache_csv, force_update, large=None, middle=None):
+    if not os.path.exists(cache_csv) or force_update:
+        large_categories = request_large_categories(s)
+        save_large_categories_csv(cache_csv, large_categories)
+    
+    df = pd.read_csv(cache_csv)
+    if large:
+        df = df[df['large_category_name'].str.contains(large, na=False)]
+    if middle:
+        df = df[df['middle_category_name'].str.contains(middle, na=False)]
+    
+    return df
 
 def search_category(s, args):
-    if not os.path.exists(args.cache_csv) or args.force_update:
-        large_categories = request_large_categories(s)
-        save_large_categories_csv(args.cache_csv, large_categories)
-    df = pd.read_csv(args.cache_csv)
-    if args.large:
-        df = df[df['large_category_name'].str.contains(args.large, na=False)]
-    if args.middle:
-        df = df[df['middle_category_name'].str.contains(args.middle, na=False)]
-    
+    df = search_category_sub(s, args.cache_csv, args.force_update, args.large, args.middle)
     print(*df.columns.tolist())
     for index, row in df.iterrows():
         print(*row.tolist())
@@ -729,8 +733,35 @@ def update_filter_flags(df, base_flags, column_name, match_values, not_match_val
     return base_flags & flags
 
 
-def filter_csv(s, args):
-    df = pd.read_csv(args.input_csv)
+def filter_db(s, args):
+    category_id = None
+    if args.update_category_name:
+        category_df = search_category_sub(s, 
+            args.cache_category_csv,
+            args.force_category_update,
+            middle=args.update_category_name)
+        if len(category_df) == 0:
+            raise ValueError(f"Not Found Category Name: {args.update_category_name}")
+        if len(category_df) > 1:
+            print(*category_df.columns.tolist())
+            for index, row in category_df.iterrows():
+                print(*row.tolist())
+            raise ValueError(f"Not Unique Category Name: {args.update_category_name}")
+        category_id = (int(category_df.iloc[0].large_category_id), int(category_df.iloc[0].middle_category_id), )
+    
+    column_name_for_service_name = 'account.service.service_name'
+    column_name_for_sub_type = 'sub_account.sub_type'
+    
+    if args.csv:
+        df = pd.read_csv(args.csv)
+    elif args.sqlite:
+        column_name_for_service_name = 'service_name'
+        column_name_for_sub_type = 'sub_type'
+        with closing(sqlite3.connect(args.sqlite)) as con:
+            df = pd.read_sql(f'SELECT * FROM {args.sqlite_table}', con)
+    else:
+        raise ValueError("invalid args")
+    
     if args.query:
         result = df.query(args.query, engine='python')
     elif args.pattern:
@@ -738,8 +769,8 @@ def filter_csv(s, args):
         
         flags = update_filter_flags(df, flags, 'middle_category', args.match_middle_categories, args.not_match_middle_categories)
         flags = update_filter_flags(df, flags, 'large_category', args.match_large_categories, args.not_match_large_categories)
-        flags = update_filter_flags(df, flags, 'account.service.service_name', args.match_service_name, args.not_match_service_name)
-        flags = update_filter_flags(df, flags, 'sub_account.sub_type', args.match_sub_account, args.not_match_sub_account)
+        flags = update_filter_flags(df, flags, column_name_for_service_name, args.match_service_name, args.not_match_service_name)
+        flags = update_filter_flags(df, flags, column_name_for_sub_type, args.match_sub_account, args.not_match_sub_account)
         
         result = df.loc[flags]
     else:
@@ -749,6 +780,7 @@ def filter_csv(s, args):
         result = result[args.columns]
     
     if args.list:
+        print(*result.columns.tolist())
         for index, row in result.iterrows():
             print(*row.tolist())
     elif args.output_csv:
@@ -756,20 +788,25 @@ def filter_csv(s, args):
     elif args.update_category:
         large_category_id, middle_category_id = args.update_category
         request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, result['id'].tolist())
+    elif category_id:
+        large_category_id, middle_category_id = category_id[0], category_id[1]
+        request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, result['id'].tolist())
     else:
         print(result)
 
 
 def request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, ids):
     url = 'https://moneyforward.com/sp2/transactions_category_bulk_updates'
-    params = dict(
-      middle_category_id=middle_category_id,
-      large_category_id=large_category_id,
-      ids=ids
-    )
-    r = s.put(url, json.dumps(params), headers={'Content-Type': 'application/json'})
-    if r.status_code != requests.codes.ok:
-        print(r.status_code, r.text)
+    n = 100
+    for i in range(0, len(ids), n):
+        params = dict(
+          middle_category_id=middle_category_id,
+          large_category_id=large_category_id,
+          ids=ids[i:i + n]
+        )
+        r = s.put(url, json.dumps(params), headers={'Content-Type': 'application/json'})
+        if r.status_code != requests.codes.ok:
+            print(r.status_code, r.text)
 
 
 def transactions_category_bulk_updates(s, args):
@@ -886,8 +923,8 @@ with add_parser(subparsers, 'cf_sum_by_sub_account', func=get_cf_sum_by_sub_acco
 
 with add_parser(subparsers, 'cf_term_data_by_sub_account', func=get_term_data_by_sub_account) as subparser:
     subparser.add_argument('sub_account_id_hash')
-    subparser.add_argument('-f', '--from', type=dateutil.parser.parse)
-    subparser.add_argument('-t', '--to', type=dateutil.parser.parse)
+    subparser.add_argument('-f', '--date_from', type=dateutil.parser.parse)
+    subparser.add_argument('-t', '--date_to', type=dateutil.parser.parse)
     add_standard_output_group(subparser, lst=True)
 
 
@@ -997,15 +1034,19 @@ with subparsers.add_parser('user_asset_acts') as subparser:
     subparser.set_defaults(func=get_user_asset_acts)
 
 
-with subparsers.add_parser('filter_csv') as subparser:
-    subparser.set_defaults(func=filter_csv)
-    subparser.add_argument('input_csv')
+with subparsers.add_parser('filter_db') as subparser:
+    subparser.set_defaults(func=filter_db)
+    with subparser.add_mutually_exclusive_group(required=True) as group:
+        group.add_argument('--csv')
+        group.add_argument('--sqlite', metavar='cf_term_data.db')
+    subparser.add_argument('--sqlite_table', default='user_asset_act')
     subparser.add_argument('--columns', type=str, nargs='+')
 
     with subparser.add_mutually_exclusive_group() as group:
         group.add_argument('--list', action='store_true')
         group.add_argument('--output_csv')
         group.add_argument('--update_category', type=int, nargs=2, metavar=('large_category_id', 'middle_category_id'))
+        group.add_argument('--update_category_name')
 
     with subparser.add_mutually_exclusive_group(required=True) as group:
         group.add_argument('-q', '--query', help='ex) content.notnull() and content.str.match(\'セブン\') and middle_category != \'コンビニ\'')
@@ -1029,6 +1070,9 @@ with subparsers.add_parser('filter_csv') as subparser:
         with group_filter_pattern.add_mutually_exclusive_group() as group:
             group.add_argument('-t', '--match_sub_account', nargs='+', metavar='sub_account')
             group.add_argument('-T', '--not_match_sub_account', nargs='+', metavar='sub_account')
+    
+    subparser.add_argument('--cache_category_csv', default='cache_search_categories.csv')
+    subparser.add_argument('--force_category_update', action='store_true')
 
 
 with subparsers.add_parser('transactions_category_bulk_updates') as subparser:
