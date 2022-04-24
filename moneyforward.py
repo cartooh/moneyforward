@@ -1094,8 +1094,8 @@ with subparsers.add_parser('filter_db') as subparser:
     with subparser.add_mutually_exclusive_group() as group:
         group.add_argument('--list', action='store_true')
         group.add_argument('--output_csv')
-        group.add_argument('--update_category', type=int, nargs=2, metavar=('large_category_id', 'middle_category_id'))
-        group.add_argument('--update_category_name')
+        group.add_argument('-u', '--update_category_name')
+        group.add_argument('-U', '--update_category', type=int, nargs=2, metavar=('large_category_id', 'middle_category_id'))
 
     with subparser.add_mutually_exclusive_group(required=True) as group:
         group.add_argument('-q', '--query', help='ex) content.notnull() and content.str.match(\'セブン\') and middle_category != \'コンビニ\'')
