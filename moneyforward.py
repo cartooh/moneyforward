@@ -719,8 +719,12 @@ def get_user_asset_acts(s, args):
     pprint(user_asset_acts)
 
 
-def update_filter_flags(df, base_flags, column_name, match_values, not_match_values):
-    if match_values:
+def update_filter_flags(df, base_flags, column_name, match_values, not_match_values, is_null=False, is_not_null=False):
+    if is_null:
+        flags = df[column_name].isnull()
+    elif is_not_null:
+        flags = df[column_name].notnull()
+    elif match_values:
         flags = False
         for val in match_values:
             flags |= df[column_name].str.contains(val, na=False)
@@ -771,6 +775,8 @@ def filter_db(s, args):
         flags = update_filter_flags(df, flags, 'large_category', args.match_large_categories, args.not_match_large_categories)
         flags = update_filter_flags(df, flags, column_name_for_service_name, args.match_service_name, args.not_match_service_name)
         flags = update_filter_flags(df, flags, column_name_for_sub_type, args.match_sub_account, args.not_match_sub_account)
+        
+        flags = update_filter_flags(df, flags, 'memo', args.match_memo, args.not_match_memo, args.null_memo, args.not_null_memo)
         
         result = df.loc[flags]
     else:
@@ -1103,6 +1109,12 @@ with subparsers.add_parser('filter_db') as subparser:
 
     with subparser.add_argument_group('group_filter_pattern') as group_filter_pattern:
         group_filter_pattern.add_argument('-r', '--reverse', action='store_true')
+
+        with group_filter_pattern.add_mutually_exclusive_group() as group:
+            group.add_argument('--null_memo', action='store_true')
+            group.add_argument('--not_null_memo', action='store_true')
+            group.add_argument('--match_memo', nargs='+', metavar='memo')
+            group.add_argument('--not_match_memo', nargs='+', metavar='memo')
 
         with group_filter_pattern.add_mutually_exclusive_group() as group:
             group.add_argument('-m', '--match_middle_categories', nargs='+', metavar='category')
