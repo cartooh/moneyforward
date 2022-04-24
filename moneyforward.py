@@ -787,15 +787,19 @@ def filter_db(s, args):
         result.to_csv(args.output_csv, encoding='utf_8_sig', index=False)
     elif args.update_category:
         large_category_id, middle_category_id = args.update_category
-        request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, result['id'].tolist())
+        request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, result['id'].tolist(), args.sqlite, args.sqlite_table)
     elif category_id:
         large_category_id, middle_category_id = category_id[0], category_id[1]
-        request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, result['id'].tolist())
+        request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, result['id'].tolist(), args.sqlite, args.sqlite_table)
     else:
         print(result)
 
 
-def request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, ids):
+def request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, ids, sqlite=None, sqlite_table=None):
+    if not ids:
+        print("ids is empty")
+        return 
+    
     url = 'https://moneyforward.com/sp2/transactions_category_bulk_updates'
     n = 100
     for i in range(0, len(ids), n):
@@ -807,7 +811,52 @@ def request_transactions_category_bulk_updates(s, large_category_id, middle_cate
         r = s.put(url, json.dumps(params), headers={'Content-Type': 'application/json'})
         if r.status_code != requests.codes.ok:
             print(r.status_code, r.text)
-
+    
+    if not (sqlite and sqlite_table):
+        return
+    large, middle = get_categories_form_session(s)
+    if not (large and middle):
+        return
+    """
+    param = dict(
+        middle_category_id=middle_category_id,
+        large_category_id=large_category_id,
+        middle_category=middle[middle_category_id],
+        large_category=large[large_category_id],
+        ids=",".join(str(x) for x in ids),
+    )
+    """
+    param = [large_category_id, large[large_category_id],
+             middle_category_id, middle[middle_category_id],
+             *ids]
+    #print(param)
+    with closing(sqlite3.connect(sqlite)) as con:
+        cur = con.cursor()
+        try:
+            """
+            cur.execute(f"UPDATE {sqlite_table} SET "
+                        + "large_category_id = :large_category_id, "
+                        + "large_category = :large_category, "
+                        + "middle_category_id = :middle_category_id, "
+                        + "middle_category = :middle_category "
+                        + "WHERE id IN (:ids)", param)
+            """
+            #con.set_trace_callback(print)
+            cur.execute(f"UPDATE {sqlite_table} SET "
+                        + "large_category_id = ?, large_category = ?, "
+                        + "middle_category_id = ?, middle_category = ? "
+                        + f"WHERE id IN ({','.join('?' * len(ids))})", param)
+            
+        except sqlite3.Error as e:
+            print("error", e.args[0])
+            print(e)
+        con.commit()
+    """
+    with closing(sqlite3.connect(sqlite)) as con:
+        cur = con.cursor()
+        for a in cur.execute(f"SELECT id, middle_category_id, middle_category FROM {sqlite_table} WHERE id IN({','.join('?' * len(ids))})", ids):
+            print(a)
+    """
 
 def transactions_category_bulk_updates(s, args):
     ids = args.ids
