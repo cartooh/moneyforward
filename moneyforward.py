@@ -1072,10 +1072,7 @@ with subparsers.add_parser('search_category') as subparser:
 
 
 with subparsers.add_parser('user_asset_acts') as subparser:
-    group = subparser.add_mutually_exclusive_group()
-    group.add_argument('--csv')
-    group.add_argument('--json')
-    group.add_argument('--list', action='store_true')
+    add_standard_output_group(subparser, lst=True)
     
     subparser.add_argument('--offset', type=int)
     subparser.add_argument('--size', type=int)
