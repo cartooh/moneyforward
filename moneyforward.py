@@ -361,14 +361,15 @@ def get_term_data_by_sub_account(s, args):
         save_json(args.json, cf_term_data_by_sub_account)
         return
     
-    if args.csv:
+    if args.csv or args.list:
         df = get_term_data_list(cf_term_data_by_sub_account, s=s)
-        df.to_csv(args.csv, encoding='utf-8-sig', index=False)
-        return
+        if args.columns:
+            df = df[args.columns]
         
-    if args.list:
-        df = get_term_data_list(cf_term_data_by_sub_account, s=s)
-        # df = df[args.list_header]
+        
+        if args.csv:
+            df.to_csv(args.csv, encoding='utf-8-sig', index=False)
+            return
         
         print(*df.columns.tolist())
         for index, row in df.iterrows():
@@ -980,6 +981,7 @@ with add_parser(subparsers, 'cf_term_data_by_sub_account', func=get_term_data_by
     subparser.add_argument('sub_account_id_hash')
     subparser.add_argument('-f', '--date_from', type=dateutil.parser.parse)
     subparser.add_argument('-t', '--date_to', type=dateutil.parser.parse)
+    subparser.add_argument('--columns', nargs='+')
     add_standard_output_group(subparser, lst=True)
 
 
