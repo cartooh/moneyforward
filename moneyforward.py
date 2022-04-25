@@ -660,6 +660,69 @@ def output_rows_for_user_asset_acts(rows, args):
         raise ValueError("Invalid args.list or args.csv")
 
 
+def request_user_asset_acts_by_id(s, id, lst=False, large=None, middle=None):
+    user_asset_acts = s.get(f"https://moneyforward.com/sp2/user_asset_acts/{id}").json()
+    if not lst:
+        return user_asset_acts
+    
+    if not 'user_asset_act' in user_asset_acts:
+        print(id)
+        pprint(user_asset_acts)
+    
+    user_asset_act_ref = {}
+    traverse(user_asset_act_ref, '', user_asset_acts['user_asset_act'])
+    user_asset_acts = [user_asset_act_ref]
+    
+    if not large or not middle:
+        large, middle = get_categories_form_session(s)
+
+    for i in range(len(user_asset_acts)):
+        user_asset_acts[i]['large_category'] = large[user_asset_acts[i]['large_category_id']]
+        user_asset_acts[i]['middle_category'] = middle[user_asset_acts[i]['middle_category_id']]
+    
+    for i, e in enumerate(user_asset_acts):
+        user_asset_acts[i]['date'] = datetime.fromisoformat(e['recognized_at']).strftime("%y/%m/%d")
+        user_asset_acts[i]['year'] = datetime.fromisoformat(e['recognized_at']).strftime("CY%y")
+        user_asset_acts[i]['month'] = datetime.fromisoformat(e['recognized_at']).strftime("%y'%m")
+    
+    return pd.DataFrame(user_asset_acts)
+
+
+def request_user_asset_acts_by_ids(s, ids):
+    large, middle = get_categories_form_session(s)
+    user_asset_acts = []
+    for id in tqdm(ids):
+        df = request_user_asset_acts_by_id(s, id, lst=True, large=large, middle=middle)
+        user_asset_acts.append(df)
+        sleep(uniform(0.1, 1))
+    return pd.concat(user_asset_acts)
+
+
+def get_user_asset_acts_by_id(s, args):
+    if args.list:
+        user_asset_acts = request_user_asset_acts_by_id(s, args.id, args.list)
+        print(*user_asset_acts.columns.tolist())
+        for index, row in user_asset_acts.iterrows():
+            print(*row.tolist())
+        return
+
+    user_asset_acts = request_user_asset_acts_by_id(s, args.id)
+    if args.json:
+        save_json(args.json, user_asset_acts)
+        return
+
+    pprint(user_asset_acts)
+
+
+def get_user_asset_acts_by_ids(s, args):
+    user_asset_acts = request_user_asset_acts_by_ids(s, args.ids)
+    if args.columns:
+        user_asset_acts = user_asset_acts[args.columns]
+    print(*user_asset_acts.columns.tolist())
+    for index, row in user_asset_acts.iterrows():
+        print(*row.tolist())
+
+
 def create_user_asset_acts_params(args):
     params = {}
     update_params('offset', params, args)
@@ -1069,6 +1132,16 @@ with subparsers.add_parser('search_category') as subparser:
     subparser.add_argument('-l', '--large')
     subparser.add_argument('-m', '--middle')
     subparser.set_defaults(func=search_category)
+
+
+with add_parser(subparsers, 'user_asset_acts_by_id', func=get_user_asset_acts_by_id) as subparser:
+    add_standard_output_group(subparser, csv=False, lst=True)
+    subparser.add_argument('id', type=int)
+
+
+with add_parser(subparsers, 'user_asset_acts_by_ids', func=get_user_asset_acts_by_ids) as subparser:
+    subparser.add_argument('ids', type=int, nargs='+')
+    subparser.add_argument('--columns', type=str, nargs='+')
 
 
 with subparsers.add_parser('user_asset_acts') as subparser:
