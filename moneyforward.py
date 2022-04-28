@@ -664,7 +664,7 @@ def request_user_asset_acts_by_id(s, id, lst=False, large=None, middle=None):
     user_asset_acts = s.get(f"https://moneyforward.com/sp2/user_asset_acts/{id}").json()
     if not lst:
         return user_asset_acts
-    
+
     if not 'user_asset_act' in user_asset_acts:
         print(id)
         pprint(user_asset_acts)
@@ -672,10 +672,10 @@ def request_user_asset_acts_by_id(s, id, lst=False, large=None, middle=None):
     user_asset_act_ref = {}
     traverse(user_asset_act_ref, '', user_asset_acts['user_asset_act'])
     user_asset_acts = [user_asset_act_ref]
-    
+
     if not large or not middle:
         large, middle = get_categories_form_session(s)
-
+    
     for i in range(len(user_asset_acts)):
         user_asset_acts[i]['large_category'] = large[user_asset_acts[i]['large_category_id']]
         user_asset_acts[i]['middle_category'] = middle[user_asset_acts[i]['middle_category_id']]
@@ -842,6 +842,9 @@ def filter_db(s, args):
         
         flags = update_filter_flags(df, flags, 'memo', args.match_memo, args.not_match_memo, args.null_memo, args.not_null_memo)
         
+        if args.is_income is not None:
+            flags &= df['is_income'] == args.is_income
+        
         result = df.loc[flags]
     else:
         raise ValueError("invalid args")
@@ -902,13 +905,13 @@ def request_transactions_category_bulk_updates(s, large_category_id, middle_cate
     #print(param)
     with closing(sqlite3.connect(sqlite)) as con:
         cur = con.cursor()
-        try:
+            try:
             """
-            cur.execute(f"UPDATE {sqlite_table} SET "
-                        + "large_category_id = :large_category_id, "
-                        + "large_category = :large_category, "
-                        + "middle_category_id = :middle_category_id, "
-                        + "middle_category = :middle_category "
+                cur.execute(f"UPDATE {sqlite_table} SET "
+                            + "large_category_id = :large_category_id, "
+                            + "large_category = :large_category, "
+                            + "middle_category_id = :middle_category_id, "
+                            + "middle_category = :middle_category "
                         + "WHERE id IN (:ids)", param)
             """
             #con.set_trace_callback(print)
@@ -916,9 +919,9 @@ def request_transactions_category_bulk_updates(s, large_category_id, middle_cate
                         + "large_category_id = ?, large_category = ?, "
                         + "middle_category_id = ?, middle_category = ? "
                         + f"WHERE id IN ({','.join('?' * len(ids))})", param)
-            
-        except sqlite3.Error as e:
-            print("error", e.args[0])
+
+            except sqlite3.Error as e:
+                print("error", e.args[0])
             print(e)
         con.commit()
     """
@@ -1181,7 +1184,8 @@ with subparsers.add_parser('filter_db') as subparser:
 
     with subparser.add_argument_group('group_filter_pattern') as group_filter_pattern:
         group_filter_pattern.add_argument('-r', '--reverse', action='store_true')
-
+        group_filter_pattern.add_argument('--is_income', type=int, choices={0, 1})
+        
         with group_filter_pattern.add_mutually_exclusive_group() as group:
             group.add_argument('--null_memo', action='store_true')
             group.add_argument('--not_null_memo', action='store_true')
