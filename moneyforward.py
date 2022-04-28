@@ -873,49 +873,33 @@ def request_transactions_category_bulk_updates(s, large_category_id, middle_cate
     
     if not (sqlite and sqlite_table):
         return
+    
     large, middle = get_categories_form_session(s)
     if not (large and middle):
         return
-    """
-    param = dict(
-        middle_category_id=middle_category_id,
-        large_category_id=large_category_id,
-        middle_category=middle[middle_category_id],
-        large_category=large[large_category_id],
-        ids=",".join(str(x) for x in ids),
-    )
-    """
-    param = [large_category_id, large[large_category_id],
-             middle_category_id, middle[middle_category_id],
-             *ids]
-    #print(param)
+    
     with closing(sqlite3.connect(sqlite)) as con:
         cur = con.cursor()
+        # con.set_trace_callback(print)
+        
+        for id in tqdm(ids):
+            user_asset_act = request_user_asset_act_by_id(s, id)
+            user_asset_act_dict = convert_user_asset_act_to_dict(user_asset_act, large, middle)
+            param = dict(id=id)
+            for k in 'middle_category_id middle_category large_category_id large_category'.split():
+                param[k] = user_asset_act_dict[k]
+
             try:
-            """
                 cur.execute(f"UPDATE {sqlite_table} SET "
                             + "large_category_id = :large_category_id, "
                             + "large_category = :large_category, "
                             + "middle_category_id = :middle_category_id, "
                             + "middle_category = :middle_category "
-                        + "WHERE id IN (:ids)", param)
-            """
-            #con.set_trace_callback(print)
-            cur.execute(f"UPDATE {sqlite_table} SET "
-                        + "large_category_id = ?, large_category = ?, "
-                        + "middle_category_id = ?, middle_category = ? "
-                        + f"WHERE id IN ({','.join('?' * len(ids))})", param)
-
+                            + "WHERE id == :id", param)
             except sqlite3.Error as e:
                 print("error", e.args[0])
-            print(e)
+            sleep(uniform(0.1, 1))
         con.commit()
-    """
-    with closing(sqlite3.connect(sqlite)) as con:
-        cur = con.cursor()
-        for a in cur.execute(f"SELECT id, middle_category_id, middle_category FROM {sqlite_table} WHERE id IN({','.join('?' * len(ids))})", ids):
-            print(a)
-    """
 
 def transactions_category_bulk_updates(s, args):
     ids = args.ids
