@@ -672,7 +672,7 @@ def request_user_asset_acts_by_id(s, id, lst=False, large=None, middle=None):
     user_asset_act_ref = {}
     traverse(user_asset_act_ref, '', user_asset_acts['user_asset_act'])
     user_asset_acts = [user_asset_act_ref]
-
+    
     if not large or not middle:
         large, middle = get_categories_form_session(s)
     
@@ -698,19 +698,8 @@ def request_user_asset_acts_by_ids(s, ids):
     return pd.concat(user_asset_acts)
 
 
-def get_user_asset_acts_by_id(s, args):
-    if args.list:
-        user_asset_acts = request_user_asset_acts_by_id(s, args.id, args.list)
-        print(*user_asset_acts.columns.tolist())
-        for index, row in user_asset_acts.iterrows():
-            print(*row.tolist())
-        return
-
+def get_user_asset_act_by_id(s, args):
     user_asset_acts = request_user_asset_acts_by_id(s, args.id)
-    if args.json:
-        save_json(args.json, user_asset_acts)
-        return
-
     pprint(user_asset_acts)
 
 
@@ -1136,8 +1125,7 @@ with subparsers.add_parser('search_category') as subparser:
     subparser.set_defaults(func=search_category)
 
 
-with add_parser(subparsers, 'user_asset_acts_by_id', func=get_user_asset_acts_by_id) as subparser:
-    add_standard_output_group(subparser, csv=False, lst=True)
+with add_parser(subparsers, 'user_asset_act_by_id', func=get_user_asset_act_by_id) as subparser:
     subparser.add_argument('id', type=int)
 
 
