@@ -816,6 +816,8 @@ def filter_db(s, args):
                 print(*row.tolist())
             raise ValueError(f"Not Unique Category Name: {args.update_category_name}")
         category_id = (int(category_df.iloc[0].large_category_id), int(category_df.iloc[0].middle_category_id), )
+    elif args.update_category:
+        category_id = args.update_category
     
     column_name_for_service_name = 'account.service.service_name'
     column_name_for_sub_type = 'sub_account.sub_type'
@@ -858,9 +860,6 @@ def filter_db(s, args):
             print(*row.tolist())
     elif args.output_csv:
         result.to_csv(args.output_csv, encoding='utf_8_sig', index=False)
-    elif args.update_category:
-        large_category_id, middle_category_id = args.update_category
-        request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, result['id'].tolist(), args.sqlite, args.sqlite_table)
     elif category_id:
         large_category_id, middle_category_id = category_id[0], category_id[1]
         request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, result['id'].tolist(), args.sqlite, args.sqlite_table)
