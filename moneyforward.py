@@ -660,47 +660,45 @@ def output_rows_for_user_asset_acts(rows, args):
         raise ValueError("Invalid args.list or args.csv")
 
 
-def request_user_asset_acts_by_id(s, id, lst=False, large=None, middle=None):
-    user_asset_acts = s.get(f"https://moneyforward.com/sp2/user_asset_acts/{id}").json()
-    if not lst:
-        return user_asset_acts
+def request_user_asset_act_by_id(s, id):
+    user_asset_act = s.get(f"https://moneyforward.com/sp2/user_asset_acts/{id}").json()
+    return user_asset_act
 
-    if not 'user_asset_act' in user_asset_acts:
-        print(id)
+
+def convert_user_asset_act_to_dict(user_asset_act, large, middle):
+    if not 'user_asset_act' in user_asset_act:
         pprint(user_asset_acts)
     
-    user_asset_act_ref = {}
-    traverse(user_asset_act_ref, '', user_asset_acts['user_asset_act'])
-    user_asset_acts = [user_asset_act_ref]
+    user_asset_act_dict = {}
+    traverse(user_asset_act_dict, '', user_asset_act['user_asset_act'])
     
-    if not large or not middle:
-        large, middle = get_categories_form_session(s)
+    user_asset_act_dict['large_category'] = large[user_asset_act_dict['large_category_id']]
+    user_asset_act_dict['middle_category'] = middle[user_asset_act_dict['middle_category_id']]
     
-    for i in range(len(user_asset_acts)):
-        user_asset_acts[i]['large_category'] = large[user_asset_acts[i]['large_category_id']]
-        user_asset_acts[i]['middle_category'] = middle[user_asset_acts[i]['middle_category_id']]
+    recognized_at = user_asset_act_dict['recognized_at']
+    user_asset_act_dict['date'] = datetime.fromisoformat(recognized_at).strftime("%y/%m/%d")
+    user_asset_act_dict['year'] = datetime.fromisoformat(recognized_at).strftime("CY%y")
+    user_asset_act_dict['month'] = datetime.fromisoformat(recognized_at).strftime("%y'%m")
     
-    for i, e in enumerate(user_asset_acts):
-        user_asset_acts[i]['date'] = datetime.fromisoformat(e['recognized_at']).strftime("%y/%m/%d")
-        user_asset_acts[i]['year'] = datetime.fromisoformat(e['recognized_at']).strftime("CY%y")
-        user_asset_acts[i]['month'] = datetime.fromisoformat(e['recognized_at']).strftime("%y'%m")
-    
-    return pd.DataFrame(user_asset_acts)
+    return user_asset_act_dict
 
 
 def request_user_asset_acts_by_ids(s, ids):
     large, middle = get_categories_form_session(s)
     user_asset_acts = []
     for id in tqdm(ids):
-        df = request_user_asset_acts_by_id(s, id, lst=True, large=large, middle=middle)
+        user_asset_act = request_user_asset_act_by_id(s, id)
+        user_asset_act_dict = convert_user_asset_act_to_dict(user_asset_act, large, middle)
+        #pprint(user_asset_act_dict)
+        df = pd.DataFrame([user_asset_act_dict])
         user_asset_acts.append(df)
         sleep(uniform(0.1, 1))
     return pd.concat(user_asset_acts)
 
 
 def get_user_asset_act_by_id(s, args):
-    user_asset_acts = request_user_asset_acts_by_id(s, args.id)
-    pprint(user_asset_acts)
+    user_asset_act = request_user_asset_act_by_id(s, args.id)
+    pprint(user_asset_act)
 
 
 def get_user_asset_acts_by_ids(s, args):
