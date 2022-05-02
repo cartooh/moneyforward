@@ -823,6 +823,9 @@ def filter_db(s, args):
         result = df.query(args.query, engine='python')
     elif args.pattern:
         flags = df['content'].str.contains(args.pattern, na=False) ^ args.reverse
+        if args.exclude_patterns is not None:
+            for ep in args.exclude_patterns:
+                flags &= ~df['content'].str.contains(ep, na=False)
         
         flags = update_filter_flags(df, flags, 'middle_category', args.match_middle_categories, args.not_match_middle_categories)
         flags = update_filter_flags(df, flags, 'large_category', args.match_large_categories, args.not_match_large_categories)
@@ -1152,6 +1155,7 @@ with subparsers.add_parser('filter_db') as subparser:
         group.add_argument('-p', '--pattern', help='ex) ".*" / "^タイムズ" ')
 
     with subparser.add_argument_group('group_filter_pattern') as group_filter_pattern:
+        group_filter_pattern.add_argument('-E', '--exclude_patterns', nargs='+', metavar='pattern')
         group_filter_pattern.add_argument('-r', '--reverse', action='store_true')
         group_filter_pattern.add_argument('--is_income', type=int, choices={0, 1})
         
