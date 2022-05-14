@@ -836,6 +836,14 @@ def filter_db(s, args):
         
         if args.is_income is not None:
             flags &= df['is_income'] == args.is_income
+        if args.lt is not None:
+            flags &= df['amount'] < args.lt
+        if args.le is not None:
+            flags &= df['amount'] <= args.le
+        if args.gt is not None:
+            flags &= df['amount'] > args.gt
+        if args.ge is not None:
+            flags &= df['amount'] >= args.ge
         
         result = df.loc[flags]
     else:
@@ -1180,7 +1188,13 @@ with subparsers.add_parser('filter_db') as subparser:
         with group_filter_pattern.add_mutually_exclusive_group() as group:
             group.add_argument('-t', '--match_sub_account', nargs='+', metavar='sub_account')
             group.add_argument('-T', '--not_match_sub_account', nargs='+', metavar='sub_account')
-    
+
+        with group_filter_pattern.add_mutually_exclusive_group() as group:
+            group.add_argument('--lt', type=int, metavar='amount', help='less then [amount]')
+            group.add_argument('--le', type=int, metavar='amount', help='less then or equal to [amount]')
+            group.add_argument('--gt', type=int, metavar='amount', help='greater then [amount]')
+            group.add_argument('--ge', type=int, metavar='amount', help='greater then or equal to [amount]')
+            
     subparser.add_argument('--cache_category_csv', default='cache_search_categories.csv')
     subparser.add_argument('--force_category_update', action='store_true')
 
