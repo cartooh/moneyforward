@@ -667,7 +667,8 @@ def request_user_asset_act_by_id(s, id):
 
 def convert_user_asset_act_to_dict(user_asset_act, large, middle):
     if not 'user_asset_act' in user_asset_act:
-        pprint(user_asset_acts)
+        pprint(user_asset_act)
+        raise ValueError('Not Found user_asset_act')
     
     user_asset_act_dict = {}
     traverse(user_asset_act_dict, '', user_asset_act['user_asset_act'])
