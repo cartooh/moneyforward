@@ -835,6 +835,9 @@ def filter_db(s, args):
         
         flags = update_filter_flags(df, flags, 'memo', args.match_memo, args.not_match_memo, args.null_memo, args.not_null_memo)
         
+        if args.ignore_invalid_data:
+            flags &= df['id'] > 0
+        
         if args.is_income is not None:
             flags &= df['is_income'] == args.is_income
         if args.lt is not None:
@@ -867,6 +870,10 @@ def filter_db(s, args):
 
 
 def request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, ids, sqlite=None, sqlite_table=None):
+    if any(id < 0 for id in ids):
+        print("Filtered invalid ids")
+        ids = [id for id in ids if id > 0]
+        
     if not ids:
         print("ids is empty")
         return 
@@ -1164,6 +1171,7 @@ with subparsers.add_parser('filter_db') as subparser:
         group.add_argument('-p', '--pattern', help='ex) ".*" / "^タイムズ" ')
 
     with subparser.add_argument_group('group_filter_pattern') as group_filter_pattern:
+        group_filter_pattern.add_argument('-i', '--ignore_invalid_data', action='store_true')
         group_filter_pattern.add_argument('-E', '--exclude_patterns', nargs='+', metavar='pattern')
         group_filter_pattern.add_argument('-r', '--reverse', action='store_true')
         group_filter_pattern.add_argument('--is_income', type=int, choices={0, 1})
