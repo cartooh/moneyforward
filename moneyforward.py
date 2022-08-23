@@ -555,7 +555,9 @@ def update_user_asset_act(s, args):
             args.partner_account_id_hash,
             args.partner_sub_account_id_hash,
             args.partner_act_id)
-
+    
+    if args.sqlite and args.sqlite_table:
+        request_update_sqlite_db(s, ids, args.sqlite, args.sqlite_table)
 
 def update_enable_transfer(s, args):
     csrf_token = get_csrf_token(s)
@@ -869,6 +871,39 @@ def filter_db(s, args):
         print(result)
 
 
+def update_sqlite_db(s, args):
+    request_update_sqlite_db(s, args.ids, args.sqlite, args.sqlite_table)
+
+
+def request_update_sqlite_db(s, ids, sqlite, sqlite_table):
+    large, middle = get_categories_form_session(s)
+    if not (large and middle):
+        raise ValueError("failed: get_categories_form_session")
+    
+    with closing(sqlite3.connect(sqlite)) as con:
+        cur = con.cursor()
+        con.set_trace_callback(print)
+        
+        for id in tqdm(ids):
+            user_asset_act = request_user_asset_act_by_id(s, id)
+            user_asset_act_dict = convert_user_asset_act_to_dict(user_asset_act, large, middle)
+            param = dict(id=id)
+            names = '''middle_category_id middle_category large_category_id large_category memo
+                       transfer_type is_target partner_account_id partner_sub_account_id partner_act_id'''.split()
+            for n in names:
+                if n in user_asset_act_dict:
+                    param[n] = user_asset_act_dict[n]
+
+            try:
+                cur.execute(f"UPDATE {sqlite_table} SET "
+                            + ", ".join(f"{n} = :{n}" for n in names if n in param)
+                            + " WHERE id == :id", param)
+            except sqlite3.Error as e:
+                print("error", e.args[0])
+            sleep(uniform(0.1, 1))
+        con.commit()
+
+
 def request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, ids, sqlite=None, sqlite_table=None):
     if any(id < 0 for id in ids):
         print("Filtered invalid ids")
@@ -890,35 +925,9 @@ def request_transactions_category_bulk_updates(s, large_category_id, middle_cate
         if r.status_code != requests.codes.ok:
             print(r.status_code, r.text)
     
-    if not (sqlite and sqlite_table):
-        return
-    
-    large, middle = get_categories_form_session(s)
-    if not (large and middle):
-        return
-    
-    with closing(sqlite3.connect(sqlite)) as con:
-        cur = con.cursor()
-        # con.set_trace_callback(print)
-        
-        for id in tqdm(ids):
-            user_asset_act = request_user_asset_act_by_id(s, id)
-            user_asset_act_dict = convert_user_asset_act_to_dict(user_asset_act, large, middle)
-            param = dict(id=id)
-            for k in 'middle_category_id middle_category large_category_id large_category'.split():
-                param[k] = user_asset_act_dict[k]
+    if sqlite and sqlite_table:
+        request_update_sqlite_db(s, ids, sqlite, sqlite_table)
 
-            try:
-                cur.execute(f"UPDATE {sqlite_table} SET "
-                            + "large_category_id = :large_category_id, "
-                            + "large_category = :large_category, "
-                            + "middle_category_id = :middle_category_id, "
-                            + "middle_category = :middle_category "
-                            + "WHERE id == :id", param)
-            except sqlite3.Error as e:
-                print("error", e.args[0])
-            sleep(uniform(0.1, 1))
-        con.commit()
 
 def transactions_category_bulk_updates(s, args):
     ids = args.ids
@@ -1108,6 +1117,8 @@ with subparsers.add_parser('update_user_asset_act') as subparser:
     subparser.add_argument('--partner_account_id_hash')
     subparser.add_argument('--partner_sub_account_id_hash')
     subparser.add_argument('--partner_act_id')
+    subparser.add_argument('-s', '--sqlite', metavar='cf_term_data.db')
+    subparser.add_argument('--sqlite_table', default='user_asset_act')
 
 
 with add_parser(subparsers, 'update_enable_transfer', func=update_enable_transfer) as subparser:
@@ -1150,6 +1161,12 @@ with subparsers.add_parser('user_asset_acts') as subparser:
     user_asset_acts_list_header = 'id is_transfer is_income is_target updated_at content amount large_category_id large_category middle_category_id middle_category account.service.service_name sub_account.sub_type sub_account.sub_name'.split()
     subparser.add_argument('--list_header', type=str, nargs='+', default=user_asset_acts_list_header)
     subparser.set_defaults(func=get_user_asset_acts)
+
+
+with add_parser(subparsers, 'update_sqlite_db', func=update_sqlite_db) as subparser:
+    subparser.add_argument('ids', type=int, nargs='*')
+    subparser.add_argument('-s', '--sqlite', required=True, metavar='cf_term_data.db')
+    subparser.add_argument('--sqlite_table', default='user_asset_act')
 
 
 with subparsers.add_parser('filter_db') as subparser:
