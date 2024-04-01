@@ -33,7 +33,7 @@ options = webdriver.ChromeOptions()
 options.add_argument('--headless')
 driver = webdriver.Chrome(options=options)
 
-driver.get('https://id.moneyforward.com/sign_in/email')
+driver.get('https://id.moneyforward.com/sign_in')
 
 text_box = driver.find_element(by=By.NAME, value="mfid_user[email]")
 text_box.send_keys(username)
