@@ -518,7 +518,7 @@ def request_update_change_type(s, csrf_token, id_, change_type):
         print(r.status_code, r.text)
 
 
-def get_ids():
+def read_ids_from_stdin():
     ids = set()
     for line in sys.stdin.readlines():
         line = line.strip()
@@ -526,6 +526,13 @@ def get_ids():
             continue
         ids.add(int(line))
     return ids
+
+
+def get_ids(args):
+    if args.ids:
+        return args.ids
+    print("Please Input IDs.") 
+    return read_ids_from_stdin()
 
 
 # def update_user_asset_act(s, args):
@@ -544,9 +551,7 @@ def get_ids():
 def update_user_asset_act(s, args):
     csrf_token = get_csrf_token(s)
     
-    ids = args.ids
-    if not args.ids:
-        ids = get_ids()
+    ids = get_ids(args)
     
     for id_ in ids:
         request_update_user_asset_act(s, csrf_token, id_,
@@ -562,9 +567,7 @@ def update_user_asset_act(s, args):
 def update_enable_transfer(s, args):
     csrf_token = get_csrf_token(s)
     
-    ids = args.ids
-    if not args.ids:
-        ids = get_ids()
+    ids = get_ids(args)
     
     for id_ in ids:
         request_update_change_type(s, csrf_token, id_, 'enable_transfer')
@@ -573,9 +576,7 @@ def update_enable_transfer(s, args):
 def update_disable_transfer(s, args):
     csrf_token = get_csrf_token(s)
     
-    ids = args.ids
-    if not args.ids:
-        ids = get_ids()
+    ids = get_ids(args)
     
     for id_ in ids:
         request_update_change_type(s, csrf_token, id_, 'disable_transfer')
@@ -872,7 +873,9 @@ def filter_db(s, args):
 
 
 def update_sqlite_db(s, args):
-    request_update_sqlite_db(s, args.ids, args.sqlite, args.sqlite_table)
+    ids = get_ids(args)
+    
+    request_update_sqlite_db(s, ids, args.sqlite, args.sqlite_table)
 
 
 def request_update_sqlite_db(s, ids, sqlite, sqlite_table):
