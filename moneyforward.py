@@ -528,17 +528,17 @@ def get_ids():
     return ids
 
 
-def update_user_asset_act(s, args):
-    csrf_token = get_csrf_token(s)
-    
-    ids = args.ids
-    if not args.ids:
-        ids = get_ids()
-    
-    for id_ in ids:
-        request_update_user_asset_act(s, csrf_token, id_,
-            args.large_category_id, args.middle_category_id,
-            args.is_target, args.memo)
+# def update_user_asset_act(s, args):
+#     csrf_token = get_csrf_token(s)
+#     
+#     ids = args.ids
+#     if not args.ids:
+#         ids = get_ids()
+#     
+#     for id_ in ids:
+#         request_update_user_asset_act(s, csrf_token, id_,
+#             args.large_category_id, args.middle_category_id,
+#             args.is_target, args.memo)
 
 
 def update_user_asset_act(s, args):
@@ -794,18 +794,18 @@ def update_filter_flags(df, base_flags, column_name, match_values, not_match_val
 def filter_db(s, args):
     category_id = None
     if args.update_category_name:
-        category_df = search_category_sub(s, 
-            args.cache_category_csv,
-            args.force_category_update,
+    category_df = search_category_sub(s, 
+        args.cache_category_csv,
+        args.force_category_update,
             middle=args.update_category_name)
-        if len(category_df) == 0:
+    if len(category_df) == 0:
             raise ValueError(f"Not Found Category Name: {args.update_category_name}")
-        if len(category_df) > 1:
-            print(*category_df.columns.tolist())
-            for index, row in category_df.iterrows():
-                print(*row.tolist())
+    if len(category_df) > 1:
+        print(*category_df.columns.tolist())
+        for index, row in category_df.iterrows():
+            print(*row.tolist())
             raise ValueError(f"Not Unique Category Name: {args.update_category_name}")
-        category_id = (int(category_df.iloc[0].large_category_id), int(category_df.iloc[0].middle_category_id), )
+    category_id = (int(category_df.iloc[0].large_category_id), int(category_df.iloc[0].middle_category_id), )
     elif args.update_category:
         category_id = args.update_category
     
