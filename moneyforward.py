@@ -791,22 +791,26 @@ def update_filter_flags(df, base_flags, column_name, match_values, not_match_val
         flags = True
     return base_flags & flags
 
-
-def filter_db(s, args):
-    category_id = None
-    if args.update_category_name:
+def get_middle_category(s, args, category_name):
     category_df = search_category_sub(s, 
         args.cache_category_csv,
         args.force_category_update,
-            middle=args.update_category_name)
+        middle=category_name)
     if len(category_df) == 0:
-            raise ValueError(f"Not Found Category Name: {args.update_category_name}")
+        raise ValueError(f"Not Found Category Name: {category_name}")
     if len(category_df) > 1:
         print(*category_df.columns.tolist())
         for index, row in category_df.iterrows():
             print(*row.tolist())
-            raise ValueError(f"Not Unique Category Name: {args.update_category_name}")
+        raise ValueError(f"Not Unique Category Name: {category_name}")
     category_id = (int(category_df.iloc[0].large_category_id), int(category_df.iloc[0].middle_category_id), )
+    return category_id
+
+
+def filter_db(s, args):
+    category_id = None
+    if args.update_category_name:
+        category_id = get_middle_category(s, args, args.update_category_name)
     elif args.update_category:
         category_id = args.update_category
     
