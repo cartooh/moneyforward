@@ -982,6 +982,56 @@ def bulk_update_category(s, args):
         print("Ok ok, quitting")
         sys.exit(1)
     
+def bulk_update_category2(s, args):
+    stream = sys.stdin
+    if args.input_file:
+        stream = open(args.input_file)
+    else:
+      print(f"Please Input. ({args.delimiter=}, column_category_name={args.column_category_name=}, {args.column_id=})")
+    
+    data = defaultdict(set)
+    for line in stream.readlines():
+        line = line.strip()
+        if not line:
+            continue
+        
+        try:
+            row = line.split(args.delimiter)
+            i = row[args.column_id]
+            c = row[args.column_category_name]
+            
+            if i.strip() == "":
+                print(f"Not Found ID. Skip! {line}")
+                continue
+            i = int(i)
+            
+            if c.strip() == "":
+                print(f"Not Found ID. Skip! {line}")
+                continue
+            
+            category_id = get_middle_category(s, args, c)
+            data[category_id].add(i)
+            
+        except Exception as e:
+            print(e)
+            print(f"Parse Error. Skip! {line}")
+            continue
+    
+    print("--------")
+    for (l, m), ids in data.items():
+        print('large_category_id', l, 'middle_category_id', m)
+        print(ids)
+        print()
+    print("--------")
+    
+    if not input("\nReally quit? (y/N)> ").lower().startswith('y'):
+        sys.exit(1)
+    print("execute")
+    
+    for (l, m), ids in data.items():
+        print('large_category_id', l, 'middle_category_id', m)
+        request_transactions_category_bulk_updates(s, l, m, list(ids),
+            sqlite=args.sqlite, sqlite_table=args.sqlite_table)
 
 setattr(argparse._ActionsContainer, '__enter__', lambda self: self)
 setattr(argparse._ActionsContainer, '__exit__', lambda self, exc_type, exc_value, traceback: None)
@@ -1245,6 +1295,18 @@ with add_parser(subparsers, 'bulk_update_category', func=bulk_update_category) a
     subparser.add_argument('-m', '--column_middle_category_id', type=int, required=True)
     subparser.add_argument('-l', '--column_large_category_id', type=int, required=True)
     subparser.add_argument('-i', '--column_id', type=int, required=True)
+
+with add_parser(subparsers, 'bulk_update_category2', func=bulk_update_category2) as subparser:
+    subparser.add_argument('-f', '--input_file')
+    subparser.add_argument('-d', '--delimiter', default=":", nargs='?', const=None)
+    subparser.add_argument('-c', '--column_category_name', type=int, default=0)
+    subparser.add_argument('-i', '--column_id', type=int, default=1)
+    
+    subparser.add_argument('--cache_category_csv', default='cache_search_categories.csv')
+    subparser.add_argument('--force_category_update', action='store_true')
+    
+    subparser.add_argument('-s', '--sqlite', metavar='cf_term_data.db')
+    subparser.add_argument('--sqlite_table', default='user_asset_act')
 
 
 args = parser.parse_args()
