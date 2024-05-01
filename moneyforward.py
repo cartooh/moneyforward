@@ -889,10 +889,11 @@ def request_update_sqlite_db(s, ids, sqlite, sqlite_table):
     
     with closing(sqlite3.connect(sqlite)) as con:
         cur = con.cursor()
-        con.set_trace_callback(print)
+        con.set_trace_callback(tqdm.write)
         
         for id in tqdm(ids):
             user_asset_act = request_user_asset_act_by_id(s, id)
+            tqdm.write(f"{user_asset_act=}")
             user_asset_act_dict = convert_user_asset_act_to_dict(user_asset_act, large, middle)
             param = dict(id=id)
             names = '''middle_category_id middle_category large_category_id large_category memo
