@@ -938,6 +938,14 @@ def request_transactions_category_bulk_updates(s, large_category_id, middle_cate
 
 
 def transactions_category_bulk_updates(s, args):
+    category_id = None
+    if args.category_name:
+        category_id = get_middle_category(s, args, args.category_name)
+    elif args.category_id:
+        category_id = args.category_id
+    large_category_id, middle_category_id = category_id
+    print(f'{large_category_id=}, {middle_category_id=}')
+    
     ids = args.ids
     if ids is None:
         data = sys.stdin.readlines()
@@ -1286,11 +1294,17 @@ with subparsers.add_parser('filter_db') as subparser:
 
 with subparsers.add_parser('transactions_category_bulk_updates') as subparser:
     subparser.set_defaults(func=transactions_category_bulk_updates)
-    subparser.add_argument('-m', '--middle_category_id', type=int, required=True)
-    subparser.add_argument('-l', '--large_category_id', type=int, required=True)
+    with subparser.add_mutually_exclusive_group(required=True) as category_group:
+        category_group.add_argument('-c', '--category_name')
+        category_group.add_argument('-p', '--category_id', nargs=2, type=int, metavar=('LARGE_CATEGORY_ID', 'MIDDLE_CATEGORY_ID'))
+    #subparser.add_argument('-m', '--middle_category_id', type=int, required=True)
+    #subparser.add_argument('-l', '--large_category_id', type=int, required=True)
     subparser.add_argument('-i', '--ids', type=int, nargs='+')
     subparser.add_argument('-s', '--sqlite', metavar='cf_term_data.db')
     subparser.add_argument('--sqlite_table', default='user_asset_act')
+    
+    subparser.add_argument('--cache_category_csv', default='cache_search_categories.csv')
+    subparser.add_argument('--force_category_update', action='store_true')
 
 
 with add_parser(subparsers, 'bulk_update_category', func=bulk_update_category) as subparser:
