@@ -550,12 +550,21 @@ def get_ids(args):
 
 def update_user_asset_act(s, args):
     csrf_token = get_csrf_token(s)
+    if args.category_name and (args.large_category_id or args.middle_category_id):
+        print("Error: Can't use -c with -l or -m.")
+        sys.exit(-1)
+    
+    if args.category_name:
+        large_category_id, middle_category_id = category_id = get_middle_category(s, args, args.category_name)
+        print(f'{large_category_id=}, {middle_category_id=}')
+    else:
+        large_category_id, middle_category_id = args.large_category_id, args.middle_category_id
         
     ids = get_ids(args)
     
     for id_ in ids:
         request_update_user_asset_act(s, csrf_token, id_,
-            args.large_category_id, args.middle_category_id,
+            large_category_id, middle_category_id,
             args.is_target, args.memo,
             args.partner_account_id_hash,
             args.partner_sub_account_id_hash,
@@ -1177,6 +1186,7 @@ with subparsers.add_parser('add_dummy_offset_data_to_user_asset_act') as subpars
 with subparsers.add_parser('update_user_asset_act') as subparser:
     subparser.set_defaults(func=update_user_asset_act)
     subparser.add_argument('ids', type=int, nargs='*')
+    subparser.add_argument('-c', '--category_name')
     subparser.add_argument('-l', '--large_category_id', type=int)
     subparser.add_argument('-m', '--middle_category_id', type=int)
     subparser.add_argument('-t', '--is_target', choices={0, 1})
