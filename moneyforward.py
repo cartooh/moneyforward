@@ -550,7 +550,7 @@ def get_ids(args):
 
 def update_user_asset_act(s, args):
     csrf_token = get_csrf_token(s)
-    
+        
     ids = get_ids(args)
     
     for id_ in ids:
@@ -1300,8 +1300,8 @@ with add_parser(subparsers, 'bulk_update_category', func=bulk_update_category) a
 with add_parser(subparsers, 'bulk_update_category2', func=bulk_update_category2) as subparser:
     subparser.add_argument('-f', '--input_file')
     subparser.add_argument('-d', '--delimiter', default=":", nargs='?', const=None)
-    subparser.add_argument('-c', '--column_category_name', type=int, default=0)
-    subparser.add_argument('-i', '--column_id', type=int, default=1)
+    subparser.add_argument('-i', '--column_id', type=int, default=0)
+    subparser.add_argument('-c', '--column_category_name', type=int, default=1)
     
     subparser.add_argument('--cache_category_csv', default='cache_search_categories.csv')
     subparser.add_argument('--force_category_update', action='store_true')
