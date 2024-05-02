@@ -944,7 +944,8 @@ def transactions_category_bulk_updates(s, args):
         ids = [int(x) for line in data for x in line.strip().split() if x.isdecimal()]
         if not ids:
             raise ValueError('ids not specified')
-    request_transactions_category_bulk_updates(s, args.large_category_id, args.middle_category_id, ids)
+    request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, ids,
+                                               sqlite=args.sqlite, sqlite_table=args.sqlite_table)
 
 
 def bulk_update_category(s, args):
@@ -1288,6 +1289,8 @@ with subparsers.add_parser('transactions_category_bulk_updates') as subparser:
     subparser.add_argument('-m', '--middle_category_id', type=int, required=True)
     subparser.add_argument('-l', '--large_category_id', type=int, required=True)
     subparser.add_argument('-i', '--ids', type=int, nargs='+')
+    subparser.add_argument('-s', '--sqlite', metavar='cf_term_data.db')
+    subparser.add_argument('--sqlite_table', default='user_asset_act')
 
 
 with add_parser(subparsers, 'bulk_update_category', func=bulk_update_category) as subparser:
