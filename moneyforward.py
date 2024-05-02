@@ -505,6 +505,27 @@ def request_update_user_asset_act(s, csrf_token, id_,
         print(r.status_code, r.text)
 
 
+def request_bulk_update_user_asset_act(s, ids, 
+        large_category_id=None, middle_category_id=None, is_target=None, memo=None,
+        partner_account_id_hash=None, partner_sub_account_id_hash=None, partner_act_id=None,
+        sqlite=None, sqlite_table=None):
+    
+    csrf_token = get_csrf_token(s)
+    
+    for id_ in ids:
+        request_update_user_asset_act(s, csrf_token, id_,
+            large_category_id=large_category_id,
+            middle_category_id=middle_category_id,
+            is_target=is_target, memo=memo, 
+            partner_account_id_hash=partner_account_id_hash, 
+            partner_sub_account_id_hash=partner_sub_account_id_hash, 
+            partner_act_id=partner_act_id,
+        )
+    
+    if sqlite and sqlite_table:
+        request_update_sqlite_db(s, ids, sqlite, sqlite_table)
+
+
 def request_update_change_type(s, csrf_token, id_, change_type):
     url = 'https://moneyforward.com/cf/update'
     headers = {
@@ -535,21 +556,7 @@ def get_ids(args):
     return read_ids_from_stdin()
 
 
-# def update_user_asset_act(s, args):
-#     csrf_token = get_csrf_token(s)
-#     
-#     ids = args.ids
-#     if not args.ids:
-#         ids = get_ids()
-#     
-#     for id_ in ids:
-#         request_update_user_asset_act(s, csrf_token, id_,
-#             args.large_category_id, args.middle_category_id,
-#             args.is_target, args.memo)
-
-
 def update_user_asset_act(s, args):
-    csrf_token = get_csrf_token(s)
     if args.category_name and (args.large_category_id or args.middle_category_id):
         print("Error: Can't use -c with -l or -m.")
         sys.exit(-1)
@@ -562,16 +569,15 @@ def update_user_asset_act(s, args):
         
     ids = get_ids(args)
     
-    for id_ in ids:
-        request_update_user_asset_act(s, csrf_token, id_,
-            large_category_id, middle_category_id,
-            args.is_target, args.memo,
-            args.partner_account_id_hash,
-            args.partner_sub_account_id_hash,
-            args.partner_act_id)
-    
-    if args.sqlite and args.sqlite_table:
-        request_update_sqlite_db(s, ids, args.sqlite, args.sqlite_table)
+    request_bulk_update_user_asset_act(s, ids,
+        large_category_id=large_category_id,
+        middle_category_id=middle_category_id,
+        is_target=args.is_target, memo=args.memo, 
+        partner_account_id_hash=args.partner_account_id_hash, 
+        partner_sub_account_id_hash=args.partner_sub_account_id_hash, 
+        partner_act_id=args.partner_act_id,
+        sqlite=args.sqlite, sqlite_table=args.sqlite_table,
+    )
 
 def update_enable_transfer(s, args):
     csrf_token = get_csrf_token(s)
