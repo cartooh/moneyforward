@@ -1078,6 +1078,9 @@ def add_parser(subparsers, name, func):
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--mf_cookies', default='mf_cookies.pkl')
 parser.add_argument('-d', '--debug', action='store_true')
+parser.add_argument('--cache_category_csv', default='cache_search_categories.csv') # いろいろなコマンドで使うので共通化
+parser.add_argument('--force_category_update', action='store_true') # いろいろなコマンドで使うので共通化
+
 
 subparsers = parser.add_subparsers(dest='cmd', required=True)
 
@@ -1303,9 +1306,6 @@ with subparsers.add_parser('filter_db') as subparser:
             group.add_argument('--le', type=int, metavar='amount', help='less then or equal to [amount]')
             group.add_argument('--gt', type=int, metavar='amount', help='greater then [amount]')
             group.add_argument('--ge', type=int, metavar='amount', help='greater then or equal to [amount]')
-            
-    subparser.add_argument('--cache_category_csv', default='cache_search_categories.csv')
-    subparser.add_argument('--force_category_update', action='store_true')
 
 
 with subparsers.add_parser('transactions_category_bulk_updates') as subparser:
@@ -1318,9 +1318,6 @@ with subparsers.add_parser('transactions_category_bulk_updates') as subparser:
     subparser.add_argument('-i', '--ids', type=int, nargs='+')
     subparser.add_argument('-s', '--sqlite', metavar='cf_term_data.db')
     subparser.add_argument('--sqlite_table', default='user_asset_act')
-    
-    subparser.add_argument('--cache_category_csv', default='cache_search_categories.csv')
-    subparser.add_argument('--force_category_update', action='store_true')
 
 
 with add_parser(subparsers, 'bulk_update_category', func=bulk_update_category) as subparser:
@@ -1335,9 +1332,6 @@ with add_parser(subparsers, 'bulk_update_category2', func=bulk_update_category2)
     subparser.add_argument('-d', '--delimiter', default=":", nargs='?', const=None)
     subparser.add_argument('-i', '--column_id', type=int, default=0)
     subparser.add_argument('-c', '--column_category_name', type=int, default=1)
-    
-    subparser.add_argument('--cache_category_csv', default='cache_search_categories.csv')
-    subparser.add_argument('--force_category_update', action='store_true')
     
     subparser.add_argument('-s', '--sqlite', metavar='cf_term_data.db')
     subparser.add_argument('--sqlite_table', default='user_asset_act')
