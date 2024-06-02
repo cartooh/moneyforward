@@ -9,7 +9,7 @@ import json
 import csv
 import logging
 import datetime
-from pprint import pprint
+from pprint import pprint, pformat
 import requests
 import pandas as pd
 import dateutil.parser
@@ -903,10 +903,10 @@ def filter_db(s, args):
 def update_sqlite_db(s, args):
     ids = get_ids(args)
     
-    request_update_sqlite_db(s, ids, args.sqlite, args.sqlite_table)
+    request_update_sqlite_db(s, ids, args.sqlite, args.sqlite_table, pretty=args.pretty)
 
 
-def request_update_sqlite_db(s, ids, sqlite, sqlite_table):
+def request_update_sqlite_db(s, ids, sqlite, sqlite_table, pretty=False):
     large, middle = get_categories_form_session(s)
     if not (large and middle):
         raise ValueError("failed: get_categories_form_session")
@@ -917,8 +917,10 @@ def request_update_sqlite_db(s, ids, sqlite, sqlite_table):
         
         for id in tqdm(ids):
             user_asset_act = request_user_asset_act_by_id(s, id)
-            tqdm.write(f"{user_asset_act=}")
+            #tqdm.write(f"{user_asset_act=}")
             user_asset_act_dict = convert_user_asset_act_to_dict(user_asset_act, large, middle)
+            if pretty:
+                tqdm.write(pformat(user_asset_act))
             param = dict(id=id)
             names = '''middle_category_id middle_category large_category_id large_category memo
                        transfer_type is_target partner_account_id partner_sub_account_id partner_act_id'''.split()
@@ -1262,6 +1264,7 @@ with add_parser(subparsers, 'update_sqlite_db', func=update_sqlite_db) as subpar
     subparser.add_argument('ids', type=int, nargs='*')
     subparser.add_argument('-s', '--sqlite', required=True, metavar='cf_term_data.db')
     subparser.add_argument('--sqlite_table', default='user_asset_act')
+    subparser.add_argument('--pretty', action='store_true')
 
 
 with subparsers.add_parser('filter_db') as subparser:
