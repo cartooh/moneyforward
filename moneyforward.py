@@ -887,6 +887,11 @@ def filter_db(s, args):
     elif category_id:
         large_category_id, middle_category_id = category_id[0], category_id[1]
         request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, result['id'].tolist(), args.sqlite, args.sqlite_table)
+    elif args.update_sqlite_db:
+        if args.sqlite and args.sqlite_table:
+            request_update_sqlite_db(s, result['id'].tolist(), args.sqlite, args.sqlite_table)
+        else:
+            raise ValueError("invalid args #{args.sqlite=}, {args.sqlite_table=}")
     else:
         print(result)
 
@@ -1268,6 +1273,7 @@ with subparsers.add_parser('filter_db') as subparser:
         group.add_argument('--output_csv')
         group.add_argument('-u', '--update_category_name')
         group.add_argument('-U', '--update_category', type=int, nargs=2, metavar=('large_category_id', 'middle_category_id'))
+        group.add_argument('-d', '--update_sqlite_db', action='store_true')
 
     with subparser.add_mutually_exclusive_group(required=True) as group:
         group.add_argument('-q', '--query', help='ex) content.notnull() and content.str.match(\'セブン\') and middle_category != \'コンビニ\'')
