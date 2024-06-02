@@ -892,6 +892,10 @@ def filter_db(s, args):
             request_update_sqlite_db(s, result['id'].tolist(), args.sqlite, args.sqlite_table)
         else:
             raise ValueError("invalid args #{args.sqlite=}, {args.sqlite_table=}")
+    elif args.list_id:
+        print()
+        print(" ".join(str(x) for x in result['id'].tolist()))
+        print()
     else:
         print(result)
 
@@ -1274,6 +1278,7 @@ with subparsers.add_parser('filter_db') as subparser:
         group.add_argument('-u', '--update_category_name')
         group.add_argument('-U', '--update_category', type=int, nargs=2, metavar=('large_category_id', 'middle_category_id'))
         group.add_argument('-d', '--update_sqlite_db', action='store_true')
+        group.add_argument('--list_id', action='store_true')
 
     with subparser.add_mutually_exclusive_group(required=True) as group:
         group.add_argument('-q', '--query', help='ex) content.notnull() and content.str.match(\'セブン\') and middle_category != \'コンビニ\'')
