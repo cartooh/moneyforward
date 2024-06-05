@@ -890,10 +890,7 @@ def filter_db(s, args):
         large_category_id, middle_category_id = category_id[0], category_id[1]
         request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, result['id'].tolist(), args.sqlite, args.sqlite_table)
     elif args.update_sqlite_db:
-        if args.sqlite and args.sqlite_table:
-            request_update_sqlite_db(s, result['id'].tolist(), args.sqlite, args.sqlite_table)
-        else:
-            raise ValueError("invalid args #{args.sqlite=}, {args.sqlite_table=}")
+        update_sqlite_db(s, args, ids=result['id'].tolist())
     elif args.list_id:
         print()
         print(" ".join(str(x) for x in result['id'].tolist()))
@@ -902,10 +899,16 @@ def filter_db(s, args):
         print(result)
 
 
-def update_sqlite_db(s, args):
-    ids = get_ids(args)
+def update_sqlite_db(s, args, ids=None):
+    ids = ids or get_ids(args)
+    pretty = False
+    if hasattr(args, 'pretty'):
+        pretty = args.pretty
 
-    request_update_sqlite_db(s, ids, args.sqlite, args.sqlite_table, pretty=args.pretty)
+    if args.sqlite and args.sqlite_table:
+        request_update_sqlite_db(s, ids, args.sqlite, args.sqlite_table, pretty=pretty)
+    else:
+        raise ValueError("invalid args #{args.sqlite=}, {args.sqlite_table=}")
 
 
 def request_update_sqlite_db(s, ids, sqlite, sqlite_table, pretty=False):
