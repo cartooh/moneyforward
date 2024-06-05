@@ -932,14 +932,24 @@ def request_update_sqlite_db(s, ids, sqlite, sqlite_table, pretty=False):
             param = dict(id=id)
             names = '''middle_category_id middle_category large_category_id large_category memo
                        is_transfer
+                       partner_account.disp_name=partner_account_disp_name
+                       partner_account.display_name=partner_account_display_name
+                       partner_account.memo=partner_account_memo
+                       partner_sub_account.sub_name=partner_account_sub_name
+                       partner_sub_account.sub_type=partner_account_sub_type
+                       partner_sub_account.sub_number=partner_account_sub_number
                        transfer_type is_target partner_account_id partner_sub_account_id partner_act_id'''.split()
             for n in names:
-                if n in user_asset_act_dict:
-                    param[n] = user_asset_act_dict[n]
+                if n.find('=') == -1:
+                    k = n
+                else:
+                    k, n = n.split("=", 2)
+                if k in user_asset_act_dict:
+                    param[n] = user_asset_act_dict[k]
 
             try:
                 cur.execute(f"UPDATE {sqlite_table} SET "
-                            + ", ".join(f"{n} = :{n}" for n in names if n in param)
+                            + ", ".join(f"{n} = :{n}" for n in param.keys() if n != 'id')
                             + " WHERE id == :id", param)
             except sqlite3.Error as e:
                 print("error", e.args[0])
