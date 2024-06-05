@@ -928,6 +928,7 @@ def request_update_sqlite_db(s, ids, sqlite, sqlite_table, pretty=False):
                 tqdm.write(pformat(user_asset_act))
             param = dict(id=id)
             names = '''middle_category_id middle_category large_category_id large_category memo
+                       is_transfer
                        transfer_type is_target partner_account_id partner_sub_account_id partner_act_id'''.split()
             for n in names:
                 if n in user_asset_act_dict:
