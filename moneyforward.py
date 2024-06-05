@@ -862,6 +862,8 @@ def filter_db(s, args):
         
         if args.is_income is not None:
             flags &= df['is_income'] == args.is_income
+        if args.is_transfer is not None:
+            flags &= df['is_transfer'] == args.is_transfer
         if args.lt is not None:
             flags &= df['amount'] < args.lt
         if args.le is not None:
@@ -902,7 +904,7 @@ def filter_db(s, args):
 
 def update_sqlite_db(s, args):
     ids = get_ids(args)
-    
+
     request_update_sqlite_db(s, ids, args.sqlite, args.sqlite_table, pretty=args.pretty)
 
 
@@ -1292,6 +1294,7 @@ with subparsers.add_parser('filter_db') as subparser:
         group_filter_pattern.add_argument('-E', '--exclude_patterns', nargs='+', metavar='pattern')
         group_filter_pattern.add_argument('-r', '--reverse', action='store_true')
         group_filter_pattern.add_argument('--is_income', type=int, choices={0, 1})
+        group_filter_pattern.add_argument('--is_transfer', type=int, choices={0, 1})
         
         with group_filter_pattern.add_mutually_exclusive_group() as group:
             group.add_argument('--null_memo', action='store_true')
