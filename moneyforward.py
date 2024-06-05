@@ -200,6 +200,9 @@ def get_account_summaries_list(account_summaries, args):
     if getattr(args, 'name', None):
         df = df[df['name'].str.contains(args.name)]
     
+    if getattr(args, 'sub_type', None):
+        df = df[df['sub_accounts.sub_type'].str.contains(args.sub_type)]
+    
     return df
 
 
@@ -217,6 +220,8 @@ def get_account_summaries(s, args):
     if args.list:
         df = get_account_summaries_list(account_summaries, args)
         df = df[args.list_header]
+        if args.unique_list:
+            df = df.drop_duplicates()
         
         print(*df.columns.tolist())
         for index, row in df.iterrows():
@@ -1126,10 +1131,12 @@ with add_parser(subparsers, 'large_categories', func=get_large_categories) as su
 
 with add_parser(subparsers, 'account_summaries', func=get_account_summaries) as subparser:
     add_standard_output_group(subparser, lst=True)
-    list_header = 'service_category_id account_id_hash show_path sub_accounts.sub_account_id_hash name sub_accounts.sub_type sub_accounts.sub_name sub_accounts.user_asset_det_summaries.asset_subclass_name sub_accounts.user_asset_det_summaries.asset_subclass_unit'.split()
+    list_header = 'service_category_id account_id_hash sub_accounts.sub_account_id_hash name sub_accounts.sub_type sub_accounts.sub_name sub_accounts.sub_number sub_accounts.user_asset_det_summaries.asset_subclass_name sub_accounts.user_asset_det_summaries.asset_subclass_unit'.split()
     subparser.add_argument('--list_header', type=str, nargs='+', default=list_header)
     subparser.add_argument('-c', '--service_category_id', type=int)
     subparser.add_argument('-n', '--name')
+    subparser.add_argument('-t', '--sub_type')
+    subparser.add_argument('-u', '--unique_list', action='store_true')
 
 with add_parser(subparsers, 'liabilities', func=get_liabilities) as subparser:
     add_standard_output_group(subparser)
