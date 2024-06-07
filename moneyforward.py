@@ -903,6 +903,15 @@ def filter_db(s, args):
         update_change_transfer(s, args, args.update_transfer, ids=ids)
         if args.sqlite:
             update_sqlite_db(s, args, ids=ids)
+    elif args.update_partner_account is not None:
+        ids = result['id'].tolist()
+        partner_account_id_hash, partner_sub_account_id_hash = args.update_partner_account
+        update_change_transfer(s, args, True, ids=ids)
+        request_bulk_update_user_asset_act(s, ids=ids, 
+            partner_account_id_hash=partner_account_id_hash,
+            partner_sub_account_id_hash=partner_sub_account_id_hash,
+            sqlite=args.sqlite, sqlite_table=args.sqlite_table,
+        )
     else:
         print(result)
 
@@ -1309,6 +1318,7 @@ with subparsers.add_parser('filter_db') as subparser:
         group.add_argument('-d', '--update_sqlite_db', action='store_true')
         group.add_argument('--list_id', action='store_true')
         group.add_argument('--update_transfer', type=int, choices={0, 1})
+        group.add_argument('--update_partner_account', nargs=2, metavar=('account_id_hash', 'sub_account_id_hash'))
 
     with subparser.add_mutually_exclusive_group(required=True) as group:
         group.add_argument('-q', '--query', help='ex) content.notnull() and content.str.match(\'セブン\') and middle_category != \'コンビニ\'')
