@@ -860,6 +860,14 @@ def filter_db(s, args):
         
         flags = update_filter_flags(df, flags, 'memo', args.match_memo, args.not_match_memo, args.null_memo, args.not_null_memo)
         
+        if args.date_from or args.date_to:
+            print(f"date: {args.date_from and args.date_from.strftime('%y/%m/%d')} - {args.date_to and args.date_to.strftime('%y/%m/%d')}")
+            dt = pd.to_datetime(df['date'], format='%y/%m/%d')
+        if args.date_from:
+            flags &= dt >= args.date_from
+        if args.date_to:
+            flags &= dt <= args.date_to
+        
         if args.ignore_invalid_data:
             flags &= df['id'] > 0
         
@@ -1330,6 +1338,8 @@ with subparsers.add_parser('filter_db') as subparser:
         group_filter_pattern.add_argument('-r', '--reverse', action='store_true')
         group_filter_pattern.add_argument('--is_income', type=int, choices={0, 1})
         group_filter_pattern.add_argument('--is_transfer', type=int, choices={0, 1})
+        group_filter_pattern.add_argument('-b', '--date_from', type=dateutil.parser.parse)
+        group_filter_pattern.add_argument('-e', '--date_to', type=dateutil.parser.parse)
         
         with group_filter_pattern.add_mutually_exclusive_group() as group:
             group.add_argument('--null_memo', action='store_true')
