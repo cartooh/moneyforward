@@ -599,7 +599,7 @@ def update_enable_transfer(s, args):
 def update_disable_transfer(s, args):
     update_change_transfer(s, args, False)
 
-def search_category_sub(s, cache_csv, force_update, large=None, middle=None):
+def search_category_sub(s, cache_csv, force_update, large=None, middle=None, is_income=None):
     if not os.path.exists(cache_csv) or force_update:
         large_categories = request_large_categories(s)
         save_large_categories_csv(cache_csv, large_categories)
@@ -609,6 +609,11 @@ def search_category_sub(s, cache_csv, force_update, large=None, middle=None):
         df = df[df['large_category_name'].str.contains(large, na=False)]
     if middle:
         df = df[df['middle_category_name'].str.contains(middle, na=False)]
+    if is_income is not None:
+        if is_income:
+            df = df[df['large_category_id'] == 1]
+        else:
+            df = df[df['large_category_id'] != 1]
     
     return df
 
@@ -809,11 +814,12 @@ def update_filter_flags(df, base_flags, column_name, match_values, not_match_val
         flags = True
     return base_flags & flags
 
-def get_middle_category(s, args, category_name):
+def get_middle_category(s, args, category_name, is_income=None):
     category_df = search_category_sub(s, 
         args.cache_category_csv,
         args.force_category_update,
-        middle=category_name)
+        middle=category_name,
+        is_income=is_income)
     if len(category_df) == 0:
         raise ValueError(f"Not Found Category Name: {category_name}")
     if len(category_df) > 1:
@@ -828,7 +834,7 @@ def get_middle_category(s, args, category_name):
 def filter_db(s, args):
     category_id = None
     if args.update_category_name:
-        category_id = get_middle_category(s, args, args.update_category_name)
+        category_id = get_middle_category(s, args, args.update_category_name, is_income=args.is_income)
     elif args.update_category:
         category_id = args.update_category
     
