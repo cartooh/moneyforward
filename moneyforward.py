@@ -23,6 +23,7 @@ from time import sleep
 from random import uniform
 from tqdm import tqdm
 from contextlib import contextmanager
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -870,6 +871,62 @@ def change_group(s, args):
     request_change_group(s, group_id_hash)
 
 
+def request_manual_user_asset_act_partner_sources(s, act_id):
+    params = dict(act_id=act_id)
+    url = "https://moneyforward.com/sp/manual_user_asset_act_partner_sources"
+    return s.get(url, params=params).json()
+
+
+def convert_manual_user_asset_act_partner_source_list(manual_user_asset_act_partner_sources, 
+      partner_candidate_acts=None,
+      service_category_id=None,
+      content=None, amount=None,
+      updated_at=None,
+      **kwargs):
+    
+    data = [x['sub_account'] for x in manual_user_asset_act_partner_sources['manual_user_asset_act_partner_sources']]
+    if partner_candidate_acts:
+        data = [ { **d,  **x['partner_candidate_act']} for d in data if d['partner_candidate_acts'] for x in d['partner_candidate_acts']]
+        for i in range(len(data)):
+          del data[i]['partner_candidate_acts']
+    
+    df = pd.DataFrame(data)
+    
+    columns = 'sub_name sub_type sub_number account_id_hash sub_account_id_hash account_disp_name account_service_name'.split()
+    for c in columns:
+        if c in kwargs and kwargs[c] is not None:
+            #print(f"{c=}, {kwargs[c]=}, {df[c]=}")
+            df = df[df[c].str.contains(kwargs[c], na=True)]
+    if service_category_id:
+        df = df[df.service_category_id == service_category_id]
+    if 'content' in df.columns and content:
+        df = df[df.content.str.contains(content, na=True)]
+    if 'amount' in df.columns and amount:
+        df = df[np.isclose(df.amount, amount)]
+    if 'updated_at' in df.columns and updated_at:
+        df = df[pd.to_datetime(df.updated_at).dt.date == updated_at.date()]
+    
+    return df
+
+def get_manual_user_asset_act_partner_sources(s, args):
+    manual_user_asset_act_partner_sources = request_manual_user_asset_act_partner_sources(s, args.act_id)
+    if args.json:
+        save_json(args.json, manual_user_asset_act_partner_sources)
+        return
+    
+    if not args.list:
+        pprint(manual_user_asset_act_partner_sources)
+        return
+    
+    df = convert_manual_user_asset_act_partner_source_list(manual_user_asset_act_partner_sources, **vars(args))
+    print(*df.columns.tolist())
+    for index, row in df.iterrows():
+        print(*row.tolist())
+    return 
+    
+
+
+
 def update_filter_flags(df, base_flags, column_name, match_values, not_match_values, is_null=False, is_not_null=False):
     if is_null:
         flags = df[column_name].isnull()
@@ -1250,6 +1307,23 @@ with add_parser(subparsers, 'change_group', func=change_group) as subparser:
     with subparser.add_mutually_exclusive_group() as group:
         group.add_argument('-i', '--group_id_hash')
         group.add_argument('-n', '--group_name')
+
+
+with add_parser(subparsers, 'manual_user_asset_act_partner_sources', func=get_manual_user_asset_act_partner_sources) as subparser:
+    subparser.add_argument('act_id', type=int)
+    subparser.add_argument('-n', '--sub_name')
+    subparser.add_argument('-t', '--sub_type')
+    subparser.add_argument('-N', '--sub_number')
+    subparser.add_argument('-S', '--service_category_id', type=int)
+    subparser.add_argument('--account_id_hash')
+    subparser.add_argument('--sub_account_id_hash')
+    subparser.add_argument('-d', '--account_disp_name')
+    subparser.add_argument('-s', '--account_service_name')
+    subparser.add_argument('-C', '--content')
+    subparser.add_argument('-a', '--amount', type=float)
+    subparser.add_argument('-D', '--updated_at', type=dateutil.parser.parse)
+    subparser.add_argument('-c', '--partner_candidate_acts', action='store_true')
+    add_standard_output_group(subparser, lst=True)
 
 
 with add_parser(subparsers, 'service_detail', func=get_service_detail) as subparser:
