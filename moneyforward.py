@@ -22,6 +22,7 @@ from bs4 import BeautifulSoup
 from time import sleep
 from random import uniform
 from tqdm import tqdm
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +129,23 @@ def get_large_categories(s, args):
     
     pprint(large_categories)
 
+@contextmanager
+def change_default_group(s):
+    sub_account_groups = request_sub_account_groups(s)
+    current_group_id_hash = sub_account_groups['current_group_id_hash']
+    request_change_group(s)
+    
+    try:
+        yield
+    finally:
+        request_change_group(s, current_group_id_hash)
 
-def request_account_summaries(s):
+
+def request_account_summaries(s, default_group=False):
+    if default_group:
+        with change_default_group(s):
+            return request_account_summaries(s)
+    
     return s.get("https://moneyforward.com/sp2/account_summaries").json()
 
 
@@ -207,7 +223,7 @@ def get_account_summaries_list(account_summaries, args):
 
 
 def get_account_summaries(s, args):
-    account_summaries = request_account_summaries(s)
+    account_summaries = request_account_summaries(s, args.default_group)
     if args.json:
         save_json(args.json, account_summaries)
         return
@@ -421,7 +437,8 @@ def request_term_data(s, args):
 
 
 def get_term_data(s, args):
-    term_data_list = request_term_data(s, args)
+    with change_default_group(s):
+        term_data_list = request_term_data(s, args)
     
     if args.csv:
         if args.csv_header:
@@ -797,6 +814,62 @@ def get_user_asset_acts(s, args):
     pprint(user_asset_acts)
 
 
+def request_sub_account_groups(s):
+    return s.get("https://moneyforward.com/sp/sub_account_groups").json()
+
+
+def get_sub_account_groups(s, args):
+    sub_account_groups = request_sub_account_groups(s)
+    if args.json:
+        save_json(args.json, sub_account_groups)
+        return
+    
+    pprint(sub_account_groups)
+
+
+def request_change_group(s, group_id_hash="0"):
+    url = 'https://moneyforward.com/sp/change_group'
+    params = dict(group_id_hash=group_id_hash)
+    r = s.post(url, json.dumps(params), headers={'Content-Type': 'application/json'})
+    if r.status_code != requests.codes.ok:
+        print(r.status_code, r.text)
+
+
+def change_group(s, args):
+    sub_account_groups = request_sub_account_groups(s)
+    current_group_id_hash = sub_account_groups['current_group_id_hash']
+    print(f"{current_group_id_hash=}")
+    
+    group_id_hash = "0"
+    
+    if args.group_name:
+        group_name = args.group_name
+        group_lists = sub_account_groups['sub_account_groups']['sub_account_group']['group_lists']
+        groups = [gl['group_list'] for gl in group_lists]
+        df = pd.DataFrame(groups)
+        df = df[df.group_name.str.contains(group_name)]
+        
+        if len(df) == 0:
+            raise ValueError(f"Not Found Category Name: {group_name}")
+        if len(df) > 1:
+            df = df['group_id_hash group_name'.split()]
+            print(*df.columns.tolist())
+            for index, row in df.iterrows():
+                print(*row.tolist())
+            raise ValueError(f"Not Unique Category Name: {group_name}")
+        
+        g = df.iloc[0]
+        group_id_hash = g.group_id_hash
+        group_name    = g.group_name
+        
+        print(f"{group_id_hash=}, {group_name=}")
+    
+    if args.group_id_hash:
+        group_id_hash = args.group_id_hash
+    
+    request_change_group(s, group_id_hash)
+
+
 def update_filter_flags(df, base_flags, column_name, match_values, not_match_values, is_null=False, is_not_null=False):
     if is_null:
         flags = df[column_name].isnull()
@@ -1160,12 +1233,24 @@ with add_parser(subparsers, 'account_summaries', func=get_account_summaries) as 
     subparser.add_argument('-n', '--name')
     subparser.add_argument('-t', '--sub_type')
     subparser.add_argument('-u', '--unique_list', action='store_true')
+    subparser.add_argument('-d', '--default_group', action='store_true')
 
 with add_parser(subparsers, 'liabilities', func=get_liabilities) as subparser:
     add_standard_output_group(subparser)
 
 with add_parser(subparsers, 'smartphone_asset', func=get_smartphone_asset) as subparser:
     add_standard_output_group(subparser)
+
+
+with add_parser(subparsers, 'sub_account_groups', func=get_sub_account_groups) as subparser:
+    add_standard_output_group(subparser)
+
+
+with add_parser(subparsers, 'change_group', func=change_group) as subparser:
+    with subparser.add_mutually_exclusive_group() as group:
+        group.add_argument('-i', '--group_id_hash')
+        group.add_argument('-n', '--group_name')
+
 
 with add_parser(subparsers, 'service_detail', func=get_service_detail) as subparser:
     subparser.add_argument('account_id_hash')
