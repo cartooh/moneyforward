@@ -981,52 +981,59 @@ def filter_db(s, args):
             df = pd.read_sql(f'SELECT * FROM {args.sqlite_table}', con)
     else:
         raise ValueError("invalid args")
-    
+
     if args.query:
-        result = df.query(args.query, engine='python')
-    elif args.pattern:
-        flags = df['content'].str.contains(args.pattern, na=False) ^ args.reverse
-        if args.exclude_patterns is not None:
-            for ep in args.exclude_patterns:
-                flags &= ~df['content'].str.contains(ep, na=False)
-        
-        flags = update_filter_flags(df, flags, 'middle_category', args.match_middle_categories, args.not_match_middle_categories)
-        flags = update_filter_flags(df, flags, 'large_category', args.match_large_categories, args.not_match_large_categories)
-        flags = update_filter_flags(df, flags, column_name_for_service_name, args.match_service_name, args.not_match_service_name)
-        flags = update_filter_flags(df, flags, column_name_for_sub_type, args.match_sub_account, args.not_match_sub_account)
-        
-        flags = update_filter_flags(df, flags, 'memo', args.match_memo, args.not_match_memo, args.null_memo, args.not_null_memo)
-        
-        if args.date_from or args.date_to:
-            print(f"date: {args.date_from and args.date_from.strftime('%y/%m/%d')} - {args.date_to and args.date_to.strftime('%y/%m/%d')}")
-            dt = pd.to_datetime(df['date'], format='%y/%m/%d')
-        if args.date_from:
-            flags &= dt >= args.date_from
-        if args.date_to:
-            flags &= dt <= args.date_to
-        
-        if args.ignore_invalid_data:
-            flags &= df['id'] > 0
-        
-        if args.is_income is not None:
-            flags &= df['is_income'] == args.is_income
-        if args.is_transfer is not None:
-            flags &= df['is_transfer'] == args.is_transfer
-        if args.lt is not None:
-            flags &= df['amount'] < args.lt
-        if args.le is not None:
-            flags &= df['amount'] <= args.le
-        if args.gt is not None:
-            flags &= df['amount'] > args.gt
-        if args.ge is not None:
-            flags &= df['amount'] >= args.ge
-        
-        result = df.loc[flags]
+        df = df.query(args.query, engine='python')
+    
+    if args.patterns is not None:
+        flags = df.index == np.nan
+        for pat in args.patterns:
+            flags |= df['content'].str.contains(pat, na=False)
     else:
-        raise ValueError("invalid args")
+        flags = df.index != np.nan
+    
+    if args.exclude_patterns is not None:
+        for ep in args.exclude_patterns:
+            flags &= ~df['content'].str.contains(ep, na=False)
+    
+    flags = update_filter_flags(df, flags, 'middle_category', args.match_middle_categories, args.not_match_middle_categories)
+    flags = update_filter_flags(df, flags, 'large_category', args.match_large_categories, args.not_match_large_categories)
+    flags = update_filter_flags(df, flags, column_name_for_service_name, args.match_service_name, args.not_match_service_name)
+    flags = update_filter_flags(df, flags, column_name_for_sub_type, args.match_sub_account, args.not_match_sub_account)
+    
+    flags = update_filter_flags(df, flags, 'memo', args.match_memo, args.not_match_memo, args.null_memo, args.not_null_memo)
+    
+    if args.date_from or args.date_to:
+        print(f"date: {args.date_from and args.date_from.strftime('%y/%m/%d')} - {args.date_to and args.date_to.strftime('%y/%m/%d')}")
+        dt = pd.to_datetime(df['date'], format='%y/%m/%d')
+    if args.date_from:
+        flags &= dt >= args.date_from
+    if args.date_to:
+        flags &= dt <= args.date_to
+    
+    if args.ignore_invalid_data:
+        flags &= df['id'] > 0
+    
+    if args.is_income is not None:
+        flags &= df['is_income'] == args.is_income
+    if args.is_transfer is not None:
+        flags &= df['is_transfer'] == args.is_transfer
+    if args.lt is not None:
+        flags &= df['amount'] < args.lt
+    if args.le is not None:
+        flags &= df['amount'] <= args.le
+    if args.gt is not None:
+        flags &= df['amount'] > args.gt
+    if args.ge is not None:
+        flags &= df['amount'] >= args.ge
+    
+    result = df.loc[flags ^ args.reverse]
     
     if args.columns:
         result = result[args.columns]
+    
+    if args.sort:
+        result = result.sort_values(args.sort)
     
     if args.list:
         print(*result.columns.tolist())
@@ -1484,6 +1491,7 @@ with subparsers.add_parser('filter_db') as subparser:
         group.add_argument('--sqlite', metavar='cf_term_data.db')
     subparser.add_argument('--sqlite_table', default='user_asset_act')
     subparser.add_argument('--columns', type=str, nargs='+')
+    subparser.add_argument('--sort', metavar='column', nargs='+')
 
     with subparser.add_mutually_exclusive_group() as group:
         group.add_argument('--list', action='store_true')
@@ -1495,14 +1503,13 @@ with subparsers.add_parser('filter_db') as subparser:
         group.add_argument('--update_transfer', type=int, choices={0, 1})
         group.add_argument('--update_partner_account', nargs=2, metavar=('account_id_hash', 'sub_account_id_hash'))
 
-    with subparser.add_mutually_exclusive_group(required=True) as group:
-        group.add_argument('-q', '--query', help='ex) content.notnull() and content.str.match(\'セブン\') and middle_category != \'コンビニ\'')
-        group.add_argument('-p', '--pattern', help='ex) ".*" / "^タイムズ" ')
-
+    subparser.add_argument('-q', '--query', help='ex) content.notnull() and content.str.match(\'セブン\') and middle_category != \'コンビニ\'')
+    
     with subparser.add_argument_group('group_filter_pattern') as group_filter_pattern:
-        group_filter_pattern.add_argument('-i', '--ignore_invalid_data', action='store_true')
-        group_filter_pattern.add_argument('-E', '--exclude_patterns', nargs='+', metavar='pattern')
         group_filter_pattern.add_argument('-r', '--reverse', action='store_true')
+        group_filter_pattern.add_argument('-p', '--patterns', nargs='+', metavar='pattern', help='ex) ".*" / "^タイムズ" ')
+        group_filter_pattern.add_argument('-E', '--exclude_patterns', nargs='+', metavar='pattern')
+        group_filter_pattern.add_argument('-i', '--ignore_invalid_data', action='store_true')
         group_filter_pattern.add_argument('--is_income', type=int, choices={0, 1})
         group_filter_pattern.add_argument('--is_transfer', type=int, choices={0, 1})
         group_filter_pattern.add_argument('-b', '--date_from', type=dateutil.parser.parse)
