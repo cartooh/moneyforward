@@ -751,9 +751,9 @@ def get_user_asset_acts_by_ids(s, args):
     user_asset_acts = request_user_asset_acts_by_ids(s, args.ids)
     if args.columns:
         user_asset_acts = user_asset_acts[args.columns]
-    print(*user_asset_acts.columns.tolist())
+    print(*user_asset_acts.columns.tolist(), sep=args.sep)
     for index, row in user_asset_acts.iterrows():
-        print(*row.tolist())
+        print(*row.tolist(), sep=args.sep)
 
 
 def create_user_asset_acts_params(args):
@@ -1449,7 +1449,8 @@ with add_parser(subparsers, 'user_asset_act_by_id', func=get_user_asset_act_by_i
 
 with add_parser(subparsers, 'user_asset_acts_by_ids', func=get_user_asset_acts_by_ids) as subparser:
     subparser.add_argument('ids', type=int, nargs='+')
-    subparser.add_argument('--columns', type=str, nargs='+')
+    subparser.add_argument('-c', '--columns', nargs='+')
+    subparser.add_argument('-s', '--sep')
 
 
 with subparsers.add_parser('user_asset_acts') as subparser:
