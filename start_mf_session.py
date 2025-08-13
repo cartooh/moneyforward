@@ -13,6 +13,7 @@ from pprint import pprint
 import keyring
 import requests
 import chromedriver_binary
+import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 
@@ -30,10 +31,10 @@ if not password:
 
 
 options = webdriver.ChromeOptions()
-options.add_argument('--headless')
+# options.add_argument('--headless')
 driver = webdriver.Chrome(options=options)
 
-driver.get('https://id.moneyforward.com/sign_in')
+driver.get('https://moneyforward.com/sign_in')
 
 text_box = driver.find_element(by=By.NAME, value="mfid_user[email]")
 text_box.send_keys(username)
@@ -43,47 +44,36 @@ text_box = driver.find_element(by=By.NAME, value="mfid_user[password]")
 text_box.send_keys(password)
 text_box.submit()
 
+while True:
+    current_url = urlparse(driver.current_url)
+    if current_url.path != '/email_otp':
+        print(f"Unkown URL: {current_url}")
+        input("Press Enter to continue...")
+        break
 
-code_verifier = base64.urlsafe_b64encode(os.urandom(128)).decode('utf-8')
-code_verifier = re.sub('[^a-zA-Z0-9]+', '', code_verifier)
+    driver.minimize_window()
+    email_otp = input("Enter OTP: ")
+    text_box = driver.find_element(by=By.NAME, value="email_otp")
+    text_box.send_keys(email_otp)
+    text_box.submit()
+    time.sleep(5)
 
-code_challenge = hashlib.sha256(code_verifier.encode('utf-8')).digest()
-code_challenge = base64.urlsafe_b64encode(code_challenge).decode('utf-8')
-code_challenge = code_challenge.replace('=', '')
-
-authorize_url = "https://id.moneyforward.com/oauth/authorize"
-authorize_params = dict(
-    client_id="2WND7CAYV1NsJDBzk13JRtjuk5g9Jtz-4gkAoVzuS_k", 
-    code_challenge=code_challenge,
-    code_challenge_method="S256",
-    redirect_uri="moneyfwd://moneyforward.com/mfid/login",
-    response_type="code",
-    scope="openid",
-    state="bWgZLVSOWbjmYtbp5oY3e0vYTScqotj2P1zvDcBwWBw",
-)
-
-sessions_url = "https://moneyforward.com//sp2/oauth/mfid/sessions"
+    if driver.current_url == 'https://moneyforward.com/':
+        print("Login successful")
+        break
 
 with requests.session() as s:
     for cookie in driver.get_cookies():
         s.cookies.set(cookie["name"], cookie["value"])
-    
-    authorize_response = s.get(authorize_url, params=authorize_params, allow_redirects=False)
-    loc = urlparse(authorize_response.headers["Location"])
-    qs = parse_qs(loc.query)
-    
-    sessions_params = dict(
-        code_verifier=code_verifier,
-        redirect_uri=urlunsplit((loc.scheme, loc.netloc, loc.path, '', '')),
-        code=qs["code"][0],
-    )
-    sessions_response = s.post(sessions_url, json.dumps(sessions_params), headers={'Content-Type': 'application/json'})
-    if sessions_response.status_code != requests.codes.ok:
-        pprint(sessions_response.json())
-    
+
+    json_data = s.get('https://moneyforward.com/sp/category').json()
+    if int(json_data['result']) != 0:
+        print("Failed to get category:", json_data)
+        exit(1)
+
     with open(args.mf_cookies, 'wb') as f:
         pickle.dump(s.cookies, f)
     print("Save session:", args.mf_cookies)
-    
+
 driver.quit()
 
