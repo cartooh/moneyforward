@@ -618,6 +618,36 @@ def update_enable_transfer(s, args):
 def update_disable_transfer(s, args):
     update_change_transfer_type(s, args, False)
 
+
+def request_change_transfer(s, id, partner_account_id_hash="0", partner_sub_account_id_hash="0", partner_act_id=None):
+    url = 'https://moneyforward.com/sp/change_transfer'
+    params = dict(id=id, partner_account_id_hash=partner_account_id_hash, partner_sub_account_id_hash=partner_sub_account_id_hash)
+    if partner_act_id is not None:
+        params['partner_act_id'] = partner_act_id
+    r = s.post(url, json.dumps(params), headers={'Content-Type': 'application/json'})
+    if r.status_code != requests.codes.ok:
+        print(r.status_code, r.text)
+
+
+def change_transfer(s, args):
+    request_change_transfer(s, str(args.id), 
+        partner_account_id_hash=args.partner_account_id_hash or "0",
+        partner_sub_account_id_hash=args.partner_sub_account_id_hash or "0",
+        partner_act_id=args.partner_act_id)
+
+
+def request_clear_transfer(s, id):
+    url = 'https://moneyforward.com/sp/clear_transfer'
+    params = dict(id=id)
+    r = s.post(url, json.dumps(params), headers={'Content-Type': 'application/json'})
+    if r.status_code != requests.codes.ok:
+        print(r.status_code, r.text)
+
+
+def clear_transfer(s, args):
+    request_clear_transfer(s, str(args.id))
+
+
 def search_category_sub(s, cache_csv, force_update, large=None, middle=None, is_income=None):
     if not os.path.exists(cache_csv) or force_update:
         large_categories = request_large_categories(s)
@@ -1440,6 +1470,17 @@ with add_parser(subparsers, 'update_enable_transfer', func=update_enable_transfe
 
 with add_parser(subparsers, 'update_disable_transfer', func=update_disable_transfer) as subparser:
     subparser.add_argument('ids', type=int, nargs='*')
+
+
+with add_parser(subparsers, 'change_transfer', func=change_transfer) as subparser:
+    subparser.add_argument('id', type=int)
+    subparser.add_argument('-a', '--partner_account_id_hash')
+    subparser.add_argument('-s', '--partner_sub_account_id_hash')
+    subparser.add_argument('-A', '--partner_act_id')
+
+
+with add_parser(subparsers, 'clear_transfer', func=clear_transfer) as subparser:
+    subparser.add_argument('id', type=int)
 
 
 with subparsers.add_parser('search_category') as subparser:
