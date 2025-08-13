@@ -491,6 +491,23 @@ def add_dummy_offset_data_to_user_asset_act(s, args):
         upsert(df, 'user_asset_act', 'id', con)
 
 
+def read_ids_from_stdin():
+    ids = set()
+    for line in sys.stdin.readlines():
+        line = line.strip()
+        if not line:
+            continue
+        ids.add(int(line))
+    return ids
+
+
+def get_ids(args):
+    if args.ids:
+        return args.ids
+    print("Please Input IDs.") 
+    return read_ids_from_stdin()
+
+
 def get_csrf_token(s):
     res = s.get("https://moneyforward.com/cf")
     soup = BeautifulSoup(res.content, "html.parser")
@@ -549,36 +566,6 @@ def request_bulk_update_user_asset_act(s, ids,
         request_update_sqlite_db(s, ids, sqlite, sqlite_table)
 
 
-def request_update_change_type(s, csrf_token, id_, change_type):
-    url = 'https://moneyforward.com/cf/update'
-    headers = {
-        'X-CSRF-Token': csrf_token,
-        'X-Requested-With': 'XMLHttpRequest',
-    }
-    params = { 'id': id_, 'change_type': change_type }
-    r = s.put(url, params, headers=headers)
-    is_ok = r.status_code == 200
-    if not is_ok:
-        print(r.status_code, r.text)
-
-
-def read_ids_from_stdin():
-    ids = set()
-    for line in sys.stdin.readlines():
-        line = line.strip()
-        if not line:
-            continue
-        ids.add(int(line))
-    return ids
-
-
-def get_ids(args):
-    if args.ids:
-        return args.ids
-    print("Please Input IDs.") 
-    return read_ids_from_stdin()
-
-
 def update_user_asset_act(s, args):
     if args.category_name and (args.large_category_id or args.middle_category_id):
         print("Error: Can't use -c with -l or -m.")
@@ -601,6 +588,20 @@ def update_user_asset_act(s, args):
         partner_act_id=args.partner_act_id,
         sqlite=args.sqlite, sqlite_table=args.sqlite_table,
     )
+
+
+def request_update_change_type(s, csrf_token, id_, change_type):
+    url = 'https://moneyforward.com/cf/update'
+    headers = {
+        'X-CSRF-Token': csrf_token,
+        'X-Requested-With': 'XMLHttpRequest',
+    }
+    params = { 'id': id_, 'change_type': change_type }
+    r = s.put(url, params, headers=headers)
+    is_ok = r.status_code == 200
+    if not is_ok:
+        print(r.status_code, r.text)
+
 
 def update_change_transfer(s, args, is_transfer, ids=None):
     csrf_token = get_csrf_token(s)
