@@ -603,7 +603,7 @@ def request_update_change_type(s, csrf_token, id_, change_type):
         print(r.status_code, r.text)
 
 
-def update_change_transfer(s, args, is_transfer, ids=None):
+def update_change_transfer_type(s, args, is_transfer, ids=None):
     csrf_token = get_csrf_token(s)
     ids = ids or get_ids(args)
     change_type = 'enable_transfer' if is_transfer else 'disable_transfer'
@@ -612,11 +612,11 @@ def update_change_transfer(s, args, is_transfer, ids=None):
         request_update_change_type(s, csrf_token, id_, change_type)
 
 def update_enable_transfer(s, args):
-    update_change_transfer(s, args, True)
+    update_change_transfer_type(s, args, True)
 
 
 def update_disable_transfer(s, args):
-    update_change_transfer(s, args, False)
+    update_change_transfer_type(s, args, False)
 
 def search_category_sub(s, cache_csv, force_update, large=None, middle=None, is_income=None):
     if not os.path.exists(cache_csv) or force_update:
@@ -1045,13 +1045,13 @@ def filter_db(s, args):
         print()
     elif args.update_transfer is not None:
         ids = result['id'].tolist()
-        update_change_transfer(s, args, args.update_transfer, ids=ids)
+        update_change_transfer_type(s, args, args.update_transfer, ids=ids)
         if args.sqlite:
             update_sqlite_db(s, args, ids=ids)
     elif args.update_partner_account is not None:
         ids = result['id'].tolist()
         partner_account_id_hash, partner_sub_account_id_hash = args.update_partner_account
-        update_change_transfer(s, args, True, ids=ids)
+        update_change_transfer_type(s, args, True, ids=ids)
         request_bulk_update_user_asset_act(s, ids=ids, 
             partner_account_id_hash=partner_account_id_hash,
             partner_sub_account_id_hash=partner_sub_account_id_hash,
