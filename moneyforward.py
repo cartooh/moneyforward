@@ -133,6 +133,8 @@ def get_large_categories(s, args):
 @contextmanager
 def change_default_group(s):
     sub_account_groups = request_sub_account_groups(s)
+    if 'current_group_id_hash' not in sub_account_groups:
+        print(f"Not Found current_group_id_hash in sub_account_groups: {sub_account_groups}")
     current_group_id_hash = sub_account_groups['current_group_id_hash']
     request_change_group(s)
     
