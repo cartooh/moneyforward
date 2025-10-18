@@ -1,0 +1,19 @@
+[project]
+name = "moneyforward"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.13.3",
+    "pandas>=2.2.3",
+    "sqlalchemy>=2.0.38",
+    "selenium>=4.29.0",
+    "keyring>=25.6.0",
+    "requests>=2.32.3",
+    "tqdm>=4.67.1",
+    "piptree>=0.1.4",
+    "pipenv>=2024.4.1",
+    "chromedriver-binary>=143.0.7478.0.0",
+    "chromedriver-binary-auto>=0.3.1",
+]
