@@ -34,9 +34,9 @@ def save_json(fn, obj):
     with open(fn, 'w') as f:
         json.dump(obj, f)
 
+# move HTTP request helpers to separate module
+from moneyforward_api import *
 
-def request_category(s):
-    return s.get("https://moneyforward.com/sp/category").json()
 
 
 def update_params(name, params, args, default=None):
@@ -54,11 +54,6 @@ def get_category(s, args):
         save_json(args.json, category)
         return
     pprint(category)
-
-
-def request_large_categories(s):
-    large_categories = s.get("https://moneyforward.com/sp2/large_categories").json()
-    return large_categories['large_categories']
 
 
 def save_large_categories_csv(fn, large_categories):
@@ -130,26 +125,6 @@ def get_large_categories(s, args):
     
     pprint(large_categories)
 
-@contextmanager
-def change_default_group(s):
-    sub_account_groups = request_sub_account_groups(s)
-    if 'current_group_id_hash' not in sub_account_groups:
-        print(f"Not Found current_group_id_hash in sub_account_groups: {sub_account_groups}")
-    current_group_id_hash = sub_account_groups['current_group_id_hash']
-    request_change_group(s)
-    
-    try:
-        yield
-    finally:
-        request_change_group(s, current_group_id_hash)
-
-
-def request_account_summaries(s, default_group=False):
-    if default_group:
-        with change_default_group(s):
-            return request_account_summaries(s)
-    
-    return s.get("https://moneyforward.com/sp2/account_summaries").json()
 
 
 def save_account_summaries_csv(fn, account_summaries, args):
@@ -250,18 +225,6 @@ def get_account_summaries(s, args):
     pprint(account_summaries)
 
 
-def request_service_detail(s, args):
-    params = {}
-    if args.sub_account_id_hash:
-        params['sub_account_id_hash'] = args.sub_account_id_hash
-    
-    if args.range:
-        params['range'] = str(args.range)
-    
-    service_detail = s.get("https://moneyforward.com/sp/service_detail/{}".format(args.account_id_hash), params=params)
-    return service_detail.json()
-
-
 def get_service_detail(s, args):
     service_detail = request_service_detail(s, args)
     if args.json:
@@ -269,15 +232,6 @@ def get_service_detail(s, args):
         return
     
     pprint(service_detail)
-
-
-def request_accounts(s, args):
-    params = {}
-    if args.sub_account_id_hash:
-        params['sub_account_id_hash'] = args.sub_account_id_hash
-    
-    accounts = s.get("https://moneyforward.com/sp2/accounts/{}".format(args.id), params=params)
-    return accounts.json()
 
 
 def get_accounts(s, args):
@@ -289,10 +243,6 @@ def get_accounts(s, args):
     pprint(accounts)
 
 
-def request_liabilities(s):
-    return s.get("https://moneyforward.com/sp2/liabilities").json()
-
-
 def get_liabilities(s, args):
     liabilities = request_liabilities(s)
     if args.json:
@@ -300,10 +250,6 @@ def get_liabilities(s, args):
         return
     
     pprint(liabilities)
-
-
-def request_smartphone_asset(s):
-    return s.get("https://moneyforward.com/smartphone_asset").json()
 
 
 def get_smartphone_asset(s, args):
@@ -315,18 +261,6 @@ def get_smartphone_asset(s, args):
     pprint(smartphone_asset)
 
 
-def request_cf_sum_by_sub_account(s, args):
-    params = {}
-    if args.sub_account_id_hash:
-        params['sub_account_id_hash'] = args.sub_account_id_hash
-    
-    if args.year_offset:
-        params['year_offset'] = str(args.year_offset)
-    
-    cf_sum_by_sub_account = s.get("https://moneyforward.com/sp/cf_sum_by_sub_account", params=params)
-    return cf_sum_by_sub_account.json()
-
-
 def get_cf_sum_by_sub_account(s, args):
     cf_sum_by_sub_account = request_cf_sum_by_sub_account(s, args)
     if args.json:
@@ -335,16 +269,6 @@ def get_cf_sum_by_sub_account(s, args):
     
     pprint(cf_sum_by_sub_account)
 
-
-def request_cf_term_data_by_sub_account(s, sub_account_id_hash, date_from=None, date_to=None):
-    params = dict(sub_account_id_hash=sub_account_id_hash)
-    if date_from:
-        params['from'] = date_from.strftime('%Y-%m-%d')
-    if date_to:
-        params['to'] = date_to.strftime('%Y-%m-%d')
-    
-    cf_term_data_by_sub_account = s.get("https://moneyforward.com/sp/cf_term_data_by_sub_account", params=params)
-    return cf_term_data_by_sub_account.json()
 
 
 def copy_dict_from_attr(dst, src, name, converter=lambda x: x):
@@ -510,43 +434,6 @@ def get_ids(args):
     return read_ids_from_stdin()
 
 
-def get_csrf_token(s):
-    res = s.get("https://moneyforward.com/cf")
-    soup = BeautifulSoup(res.content, "html.parser")
-    return soup.find("meta", {'name': 'csrf-token'})['content']
-
-
-def request_update_user_asset_act(s, csrf_token, id_, 
-        large_category_id=None, middle_category_id=None, is_target=None, memo=None,
-        partner_account_id_hash=None, partner_sub_account_id_hash=None, partner_act_id=None):
-    url = 'https://moneyforward.com/cf/update'
-    headers = {
-        'X-CSRF-Token': csrf_token,
-        'X-Requested-With': 'XMLHttpRequest',
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-    }
-    params = { 'user_asset_act[id]': id_ }
-    if large_category_id:
-        params['user_asset_act[large_category_id]'] = large_category_id
-    if middle_category_id:
-        params['user_asset_act[middle_category_id]'] = middle_category_id
-    if is_target is not None:
-        params['user_asset_act[is_target]'] = is_target
-    if memo:
-        params['user_asset_act[memo]'] = memo
-    if partner_account_id_hash:
-        params['user_asset_act[partner_account_id_hash]'] = partner_account_id_hash
-    if partner_sub_account_id_hash:
-        params['user_asset_act[partner_sub_account_id_hash]'] = partner_sub_account_id_hash
-    if partner_act_id:
-        params['user_asset_act[partner_act_id]'] = partner_act_id
-    
-    r = s.put(url, params, headers=headers)
-    is_ok = r.status_code == 200
-    if not is_ok:
-        print(r.status_code, r.text)
-
-
 def request_bulk_update_user_asset_act(s, ids, 
         large_category_id=None, middle_category_id=None, is_target=None, memo=None,
         partner_account_id_hash=None, partner_sub_account_id_hash=None, partner_act_id=None,
@@ -592,19 +479,6 @@ def update_user_asset_act(s, args):
     )
 
 
-def request_update_change_type(s, csrf_token, id_, change_type):
-    url = 'https://moneyforward.com/cf/update'
-    headers = {
-        'X-CSRF-Token': csrf_token,
-        'X-Requested-With': 'XMLHttpRequest',
-    }
-    params = { 'id': id_, 'change_type': change_type }
-    r = s.put(url, params, headers=headers)
-    is_ok = r.status_code == 200
-    if not is_ok:
-        print(r.status_code, r.text)
-
-
 def update_change_transfer_type(s, args, is_transfer, ids=None):
     csrf_token = get_csrf_token(s)
     ids = ids or get_ids(args)
@@ -621,29 +495,12 @@ def update_disable_transfer(s, args):
     update_change_transfer_type(s, args, False)
 
 
-def request_change_transfer(s, id, partner_account_id_hash="0", partner_sub_account_id_hash="0", partner_act_id=None):
-    url = 'https://moneyforward.com/sp/change_transfer'
-    params = dict(id=id, partner_account_id_hash=partner_account_id_hash, partner_sub_account_id_hash=partner_sub_account_id_hash)
-    if partner_act_id is not None:
-        params['partner_act_id'] = partner_act_id
-    r = s.post(url, json.dumps(params), headers={'Content-Type': 'application/json'})
-    if r.status_code != requests.codes.ok:
-        print(r.status_code, r.text)
-
 
 def change_transfer(s, args):
     request_change_transfer(s, str(args.id), 
         partner_account_id_hash=args.partner_account_id_hash or "0",
         partner_sub_account_id_hash=args.partner_sub_account_id_hash or "0",
         partner_act_id=args.partner_act_id)
-
-
-def request_clear_transfer(s, id):
-    url = 'https://moneyforward.com/sp/clear_transfer'
-    params = dict(id=id)
-    r = s.post(url, json.dumps(params), headers={'Content-Type': 'application/json'})
-    if r.status_code != requests.codes.ok:
-        print(r.status_code, r.text)
 
 
 def clear_transfer(s, args):
@@ -737,11 +594,6 @@ def output_rows_for_user_asset_acts(rows, args):
         raise ValueError("Invalid args.list or args.csv")
 
 
-def request_user_asset_act_by_id(s, id):
-    user_asset_act = s.get(f"https://moneyforward.com/sp2/user_asset_acts/{id}").json()
-    return user_asset_act
-
-
 def convert_user_asset_act_to_dict(user_asset_act, large, middle):
     if not 'user_asset_act' in user_asset_act:
         pprint(user_asset_act)
@@ -801,17 +653,7 @@ def create_user_asset_acts_params(args):
     return params
 
 
-def request_user_asset_acts(s, params={}):
-    user_asset_acts = s.get("https://moneyforward.com/sp2/user_asset_acts", params=params).json()
-    if 'messages' in user_asset_acts:
-        pprint(user_asset_acts)
-        raise ValueError(user_asset_acts['messages'])
-    
-    if 'error' in user_asset_acts:
-        pprint(user_asset_acts)
-        raise ValueError(user_asset_acts['error'])
-    
-    return user_asset_acts
+
 
 def get_user_asset_acts(s, args):
     params = create_user_asset_acts_params(args)
@@ -848,10 +690,6 @@ def get_user_asset_acts(s, args):
     pprint(user_asset_acts)
 
 
-def request_sub_account_groups(s):
-    return s.get("https://moneyforward.com/sp/sub_account_groups").json()
-
-
 def get_sub_account_groups(s, args):
     sub_account_groups = request_sub_account_groups(s)
     if args.json:
@@ -859,14 +697,6 @@ def get_sub_account_groups(s, args):
         return
     
     pprint(sub_account_groups)
-
-
-def request_change_group(s, group_id_hash="0"):
-    url = 'https://moneyforward.com/sp/change_group'
-    params = dict(group_id_hash=group_id_hash)
-    r = s.post(url, json.dumps(params), headers={'Content-Type': 'application/json'})
-    if r.status_code != requests.codes.ok:
-        print(r.status_code, r.text)
 
 
 def change_group(s, args):
@@ -902,12 +732,6 @@ def change_group(s, args):
         group_id_hash = args.group_id_hash
     
     request_change_group(s, group_id_hash)
-
-
-def request_manual_user_asset_act_partner_sources(s, act_id):
-    params = dict(act_id=act_id)
-    url = "https://moneyforward.com/sp/manual_user_asset_act_partner_sources"
-    return s.get(url, params=params).json()
 
 
 def convert_manual_user_asset_act_partner_source_list(manual_user_asset_act_partner_sources, 
@@ -1156,25 +980,7 @@ def request_update_sqlite_db(s, ids, sqlite, sqlite_table, pretty=False):
 
 
 def request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, ids, sqlite=None, sqlite_table=None):
-    if any(id < 0 for id in ids):
-        print("Filtered invalid ids")
-        ids = [id for id in ids if id > 0]
-        
-    if not ids:
-        print("ids is empty")
-        return 
-    
-    url = 'https://moneyforward.com/sp2/transactions_category_bulk_updates'
-    n = 100
-    for i in range(0, len(ids), n):
-        params = dict(
-          middle_category_id=middle_category_id,
-          large_category_id=large_category_id,
-          ids=ids[i:i + n]
-        )
-        r = s.put(url, json.dumps(params), headers={'Content-Type': 'application/json'})
-        if r.status_code != requests.codes.ok:
-            print(r.status_code, r.text)
+    request_transactions_category_bulk_updates_native(s, large_category_id, middle_category_id, ids)
     
     if sqlite and sqlite_table:
         request_update_sqlite_db(s, ids, sqlite, sqlite_table)
@@ -1616,16 +1422,21 @@ with add_parser(subparsers, 'bulk_update_category2', func=bulk_update_category2)
     subparser.add_argument('--sqlite_table', default='user_asset_act')
 
 
-args = parser.parse_args()
+def main(argv=None):
+    args = parser.parse_args(argv)
 
-if args.debug:
-    import http.client
-    http.client.HTTPConnection.debuglevel = 2
+    if args.debug:
+        import http.client
+        http.client.HTTPConnection.debuglevel = 2
 
-with requests.session() as s:
-    with open(args.mf_cookies, 'rb') as f:
-        s.cookies = pickle.load(f)
-    
-    args.func(s, args)
+    with requests.session() as s:
+        with open(args.mf_cookies, 'rb') as f:
+            s.cookies = pickle.load(f)
+
+        args.func(s, args)
+
+
+if __name__ == '__main__':
+    main()
 
 
