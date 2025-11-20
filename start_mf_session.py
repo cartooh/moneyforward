@@ -12,9 +12,11 @@ from urllib.parse import urlparse, parse_qs, urlunsplit
 from pprint import pprint
 import keyring
 import requests
-import chromedriver_binary
+# import chromedriver_binary
 import time
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 
 parser = argparse.ArgumentParser()
@@ -30,8 +32,9 @@ if not password:
     password = keyring.get_password(args.service, username)
 
 
-options = webdriver.ChromeOptions()
-# options.add_argument('--headless')
+options = Options()
+# options.add_argument('--headless') # ウィンドウが表示されていないと、タイミングが合わない。最小化もNG
+options.add_argument("--window-size=200,200")  # 小さいサイズで起動
 driver = webdriver.Chrome(options=options)
 
 driver.get('https://moneyforward.com/sign_in')
@@ -47,7 +50,7 @@ text_box.submit()
 while True:
     current_url = urlparse(driver.current_url)
     if current_url.path != '/email_otp':
-        print(f"Unkown URL: {current_url}")
+        print(f"Unkown URL({current_url.path}): {current_url}")
         input("Press Enter to continue...")
         break
 
