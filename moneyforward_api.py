@@ -6,6 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 from contextlib import contextmanager
 from pprint import pprint
+import pickle
 
 
 def request_category(s):
@@ -219,3 +220,12 @@ def request_transactions_category_bulk_updates(s, large_category_id, middle_cate
         if r.status_code != requests.codes.ok:
             print(r.status_code, r.text)
 
+@contextmanager
+def session_from_cookie_file(cookie_file='mf_cookies.pkl'):
+    s = requests.Session()
+    try:
+        with open(cookie_file, 'rb') as f:
+            s.cookies = pickle.load(f)
+        yield s
+    finally:
+        s.close()

@@ -1429,10 +1429,7 @@ def main(argv=None):
         import http.client
         http.client.HTTPConnection.debuglevel = 2
 
-    with requests.session() as s:
-        with open(args.mf_cookies, 'rb') as f:
-            s.cookies = pickle.load(f)
-
+    with session_from_cookie_file(args.mf_cookies) as s:
         args.func(s, args)
 
 
