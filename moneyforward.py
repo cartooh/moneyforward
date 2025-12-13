@@ -899,7 +899,7 @@ def filter_db(s, args):
         result.to_csv(args.output_csv, encoding='utf_8_sig', index=False)
     elif category_id:
         large_category_id, middle_category_id = category_id[0], category_id[1]
-        request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, result['id'].tolist(), args.sqlite, args.sqlite_table)
+        request_transactions_category_bulk_updates_with_update_db(s, large_category_id, middle_category_id, result['id'].tolist(), args.sqlite, args.sqlite_table)
     elif args.update_sqlite_db:
         update_sqlite_db(s, args, ids=result['id'].tolist())
     elif args.list_id:
@@ -979,8 +979,8 @@ def request_update_sqlite_db(s, ids, sqlite, sqlite_table, pretty=False):
         con.commit()
 
 
-def request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, ids, sqlite=None, sqlite_table=None):
-    request_transactions_category_bulk_updates_native(s, large_category_id, middle_category_id, ids)
+def request_transactions_category_bulk_updates_with_update_db(s, large_category_id, middle_category_id, ids, sqlite=None, sqlite_table=None):
+    request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, ids)
     
     if sqlite and sqlite_table:
         request_update_sqlite_db(s, ids, sqlite, sqlite_table)
@@ -1001,7 +1001,7 @@ def transactions_category_bulk_updates(s, args):
         ids = [int(x) for line in data for x in line.strip().split() if x.isdecimal()]
         if not ids:
             raise ValueError('ids not specified')
-    request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, ids,
+    request_transactions_category_bulk_updates_with_update_db(s, large_category_id, middle_category_id, ids,
                                                sqlite=args.sqlite, sqlite_table=args.sqlite_table)
 
 
@@ -1035,7 +1035,7 @@ def bulk_update_category(s, args):
         for l, md in data.items():
             for m, ids in md.items():
                 print('large_category_id', l, 'middle_category_id', m)
-                request_transactions_category_bulk_updates(s, l, m, list(ids))
+                request_transactions_category_bulk_updates_with_update_db(s, l, m, list(ids))
 
     except KeyboardInterrupt:
         print("Ok ok, quitting")
@@ -1089,7 +1089,7 @@ def bulk_update_category2(s, args):
     
     for (l, m), ids in data.items():
         print('large_category_id', l, 'middle_category_id', m)
-        request_transactions_category_bulk_updates(s, l, m, list(ids),
+        request_transactions_category_bulk_updates_with_update_db(s, l, m, list(ids),
             sqlite=args.sqlite, sqlite_table=args.sqlite_table)
 
 setattr(argparse._ActionsContainer, '__enter__', lambda self: self)

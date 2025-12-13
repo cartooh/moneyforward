@@ -198,7 +198,7 @@ def request_manual_user_asset_act_partner_sources(s, act_id):
     return s.get(url, params=params).json()
 
 
-def request_transactions_category_bulk_updates_native(s, large_category_id, middle_category_id, ids):
+def request_transactions_category_bulk_updates(s, large_category_id, middle_category_id, ids):
     if any(id < 0 for id in ids):
         print("Filtered invalid ids")
         ids = [id for id in ids if id > 0]
