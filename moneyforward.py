@@ -37,6 +37,9 @@ def save_json(fn, obj):
 # move HTTP request helpers to separate module
 from moneyforward_api import *
 
+# move shared utilities to separate module
+from moneyforward_utils import save_large_categories_csv, search_category_sub, get_middle_category_impl
+
 
 
 # CLI wrapper functions for moneyforward_api functions
@@ -91,14 +94,7 @@ def get_category(s, args):
     pprint(category)
 
 
-def save_large_categories_csv(fn, large_categories):
-    with open(fn, 'wt', encoding='utf_8_sig') as f:
-        writer = csv.writer(f, lineterminator="\n")
-        writer.writerow("large_category_id large_category_name middle_category_id middle_category_name user_category".split())
-        for large_category in large_categories:
-            for middle_category in large_category['middle_categories']:
-                writer.writerow([large_category['id'], large_category['name'], 
-                    middle_category['id'], middle_category['name'], middle_category['user_category']])
+# save_large_categories_csv is now imported from moneyforward_utils
 
 
 def upsert(frame, name: str, unique_index_label, con):
@@ -542,23 +538,7 @@ def clear_transfer(s, args):
     request_clear_transfer(s, str(args.id))
 
 
-def search_category_sub(s, cache_csv, force_update, large=None, middle=None, is_income=None):
-    if not os.path.exists(cache_csv) or force_update:
-        large_categories = request_large_categories(s)
-        save_large_categories_csv(cache_csv, large_categories)
-    
-    df = pd.read_csv(cache_csv)
-    if large:
-        df = df[df['large_category_name'].str.contains(large, na=False)]
-    if middle:
-        df = df[df['middle_category_name'].str.contains(middle, na=False)]
-    if is_income is not None:
-        if is_income:
-            df = df[df['large_category_id'] == 1]
-        else:
-            df = df[df['large_category_id'] != 1]
-    
-    return df
+# search_category_sub is now imported from moneyforward_utils
 
 def search_category(s, args):
     df = search_category_sub(s, args.cache_csv, args.force_update, args.large, args.middle)
@@ -824,20 +804,29 @@ def update_filter_flags(df, base_flags, column_name, match_values, not_match_val
     return base_flags & flags
 
 def get_middle_category(s, args, category_name, is_income=None):
-    category_df = search_category_sub(s, 
-        args.cache_category_csv,
-        args.force_category_update,
-        middle=category_name,
-        is_income=is_income)
-    if len(category_df) == 0:
-        raise ValueError(f"Not Found Category Name: {category_name}")
-    if len(category_df) > 1:
-        print(*category_df.columns.tolist())
-        for index, row in category_df.iterrows():
-            print(*row.tolist())
-        raise ValueError(f"Not Unique Category Name: {category_name}")
-    category_id = (int(category_df.iloc[0].large_category_id), int(category_df.iloc[0].middle_category_id), )
-    return category_id
+    """argsからカテゴリIDを取得（CLIラッパー）"""
+    try:
+        return get_middle_category_impl(
+            s,
+            args.cache_category_csv,
+            args.force_category_update,
+            category_name,
+            is_income=is_income
+        )
+    except ValueError as e:
+        # エラー時に候補を表示（既存動作の互換性維持）
+        if "Not Unique" in str(e):
+            category_df = search_category_sub(
+                s,
+                args.cache_category_csv,
+                args.force_category_update,
+                middle=category_name,
+                is_income=is_income
+            )
+            print(*category_df.columns.tolist())
+            for index, row in category_df.iterrows():
+                print(*row.tolist())
+        raise
 
 
 def filter_db(s, args):
