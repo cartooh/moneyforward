@@ -39,15 +39,6 @@ from moneyforward_api import *
 
 
 
-def update_params(name, params, args, default=None):
-    value = getattr(args, name)
-    if value:
-        params[name] = value
-    elif default:
-        params[name] = default
-    return params
-
-
 # CLI wrapper functions for moneyforward_api functions
 def request_service_detail_from_args(s, args):
     """argsからサービス詳細を取得（CLIラッパー）"""
@@ -74,6 +65,21 @@ def request_cf_sum_by_sub_account_from_args(s, args):
         s,
         sub_account_id_hash=args.sub_account_id_hash,
         year_offset=args.year_offset
+    )
+
+
+def request_user_asset_acts_from_args(s, args):
+    """argsからユーザー資産取引一覧を取得（CLIラッパー）"""
+    return request_user_asset_acts(
+        s,
+        offset=args.offset,
+        size=args.size,
+        is_new=args.is_new,
+        is_old=args.is_old,
+        is_continuous=args.is_continuous,
+        select_category=args.select_category,
+        base_date=args.base_date,
+        keyword=args.keyword
     )
 
 
@@ -569,7 +575,7 @@ def get_categories_form_user_asset_acts(user_asset_acts):
 
 
 def get_categories_form_session(s):
-    user_asset_acts = request_user_asset_acts(s, params=dict(size=1))
+    user_asset_acts = request_user_asset_acts(s, size=1)
     return get_categories_form_user_asset_acts(user_asset_acts)
 
 
@@ -669,49 +675,36 @@ def get_user_asset_acts_by_ids(s, args):
         print(*row.tolist(), sep=args.sep)
 
 
-def create_user_asset_acts_params(args):
-    params = {}
-    update_params('offset', params, args)
-    update_params('size', params, args)
-    update_params('is_new', params, args)
-    update_params('is_old', params, args)
-    update_params('is_continuous', params, args)
-    update_params('select_category', params, args)
-    update_params('base_date', params, args)
-    update_params('keyword', params, args)
-    return params
-
-
-
-
 def get_user_asset_acts(s, args):
-    params = create_user_asset_acts_params(args)
-    
     if args.csv or args.list:
         rows = []
         MAX_SIZE = 500
-        if 'size' in params and params['size'] > MAX_SIZE:
-            if 'offset' not in params:
-                params['offset'] = 0
-            size = params['size']
+        size = getattr(args, 'size', None)
+        if size and size > MAX_SIZE:
+            offset = getattr(args, 'offset', 0)
+            original_size = size
             while size > 0:
                 logger.info('get_user_asset_acts: size = %d' % size)
-                params['size'] = min(size, MAX_SIZE)
-                user_asset_acts = request_user_asset_acts(s, params)
+                # 一時的にargsのsize/offsetを変更
+                args.size = min(size, MAX_SIZE)
+                args.offset = offset
+                user_asset_acts = request_user_asset_acts_from_args(s, args)
                 append_row_form_user_asset_acts(rows, user_asset_acts, args)
-                params['offset'] += MAX_SIZE
+                offset += MAX_SIZE
                 size -= MAX_SIZE
                 
                 logger.info('total_count: %d' % user_asset_acts['total_count'])
                 if user_asset_acts['total_count'] <= 0:
                     break
+            # 元の値に戻す
+            args.size = original_size
         else:
-            user_asset_acts = request_user_asset_acts(s, params)
+            user_asset_acts = request_user_asset_acts_from_args(s, args)
             append_row_form_user_asset_acts(rows, user_asset_acts, args)
         output_rows_for_user_asset_acts(rows, args)
         return
     
-    user_asset_acts = request_user_asset_acts(s, params)
+    user_asset_acts = request_user_asset_acts_from_args(s, args)
     if args.json:
         save_json(args.json, user_asset_acts)
         return

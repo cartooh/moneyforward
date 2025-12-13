@@ -318,25 +318,49 @@ def request_user_asset_act_by_id(s, id):
     return user_asset_act
 
 
-def request_user_asset_acts(s, params={}):
-    """取引一覧を取得（内部実装用）
+def request_user_asset_acts(s, 
+    offset=None, size=None, is_new=None, is_old=None, 
+    is_continuous=None, select_category=None, base_date=None, keyword=None):
+    """ユーザー資産取引一覧を取得
     
-    検索パラメータを指定して取引一覧を取得する。
+    具体的なパラメータを受け取り、取引一覧API呼び出しを行う。
     エラーレスポンスの場合は例外を発生させる。
     
     Args:
         s: requests.Session
-        params: 検索パラメータ辞書 (offset, size, keyword等)
+        offset: オフセット (optional)
+        size: 取得件数 (optional)
+        is_new: 新規フラグ (optional)
+        is_old: 過去フラグ (optional)
+        is_continuous: 連続フラグ (optional)
+        select_category: カテゴリ選択 (optional)
+        base_date: 基準日 (optional)
+        keyword: キーワード検索 (optional)
     
     Returns:
         dict: 取引一覧情報
     
     Raises:
         ValueError: APIがエラーを返した場合
-    
-    Note:
-        外部からの呼び出しにはrequest_user_asset_acts_with_paramsを使用すること
     """
+    params = {}
+    if offset is not None:
+        params['offset'] = offset
+    if size is not None:
+        params['size'] = size
+    if is_new is not None:
+        params['is_new'] = is_new
+    if is_old is not None:
+        params['is_old'] = is_old
+    if is_continuous is not None:
+        params['is_continuous'] = is_continuous
+    if select_category is not None:
+        params['select_category'] = select_category
+    if base_date is not None:
+        params['base_date'] = base_date
+    if keyword is not None:
+        params['keyword'] = keyword
+    
     user_asset_acts = s.get("https://moneyforward.com/sp2/user_asset_acts", params=params).json()
     if 'messages' in user_asset_acts:
         pprint(user_asset_acts)
