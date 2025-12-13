@@ -48,6 +48,35 @@ def update_params(name, params, args, default=None):
     return params
 
 
+# CLI wrapper functions for moneyforward_api functions
+def request_service_detail_from_args(s, args):
+    """argsからサービス詳細を取得（CLIラッパー）"""
+    return request_service_detail(
+        s,
+        account_id_hash=args.account_id_hash,
+        sub_account_id_hash=args.sub_account_id_hash,
+        range_value=getattr(args, 'range', None)
+    )
+
+
+def request_accounts_from_args(s, args):
+    """argsからアカウント情報を取得（CLIラッパー）"""
+    return request_accounts(
+        s,
+        account_id=args.id,
+        sub_account_id_hash=args.sub_account_id_hash
+    )
+
+
+def request_cf_sum_by_sub_account_from_args(s, args):
+    """argsからキャッシュフロー集計を取得（CLIラッパー）"""
+    return request_cf_sum_by_sub_account(
+        s,
+        sub_account_id_hash=args.sub_account_id_hash,
+        year_offset=args.year_offset
+    )
+
+
 def get_category(s, args):
     category = request_category(s)
     if args.json:
@@ -226,7 +255,7 @@ def get_account_summaries(s, args):
 
 
 def get_service_detail(s, args):
-    service_detail = request_service_detail(s, args)
+    service_detail = request_service_detail_from_args(s, args)
     if args.json:
         save_json(args.json, service_detail)
         return
@@ -235,7 +264,7 @@ def get_service_detail(s, args):
 
 
 def get_accounts(s, args):
-    accounts = request_accounts(s, args)
+    accounts = request_accounts_from_args(s, args)
     if args.json:
         save_json(args.json, accounts)
         return
@@ -262,7 +291,7 @@ def get_smartphone_asset(s, args):
 
 
 def get_cf_sum_by_sub_account(s, args):
-    cf_sum_by_sub_account = request_cf_sum_by_sub_account(s, args)
+    cf_sum_by_sub_account = request_cf_sum_by_sub_account_from_args(s, args)
     if args.json:
         save_json(args.json, cf_sum_by_sub_account)
         return

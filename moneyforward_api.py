@@ -40,24 +40,38 @@ def request_account_summaries(s, default_group=False):
     return s.get("https://moneyforward.com/sp2/account_summaries").json()
 
 
-def request_service_detail(s, args):
+def request_service_detail(s, account_id_hash, sub_account_id_hash=None, range_value=None):
+    """サービス詳細を取得
+    
+    Args:
+        s: requests.Session
+        account_id_hash: アカウントIDハッシュ
+        sub_account_id_hash: サブアカウントIDハッシュ (optional)
+        range_value: 範囲指定 (optional)
+    """
     params = {}
-    if getattr(args, 'sub_account_id_hash', None):
-        params['sub_account_id_hash'] = args.sub_account_id_hash
-
-    if getattr(args, 'range', None):
-        params['range'] = str(args.range)
-
-    service_detail = s.get("https://moneyforward.com/sp/service_detail/{}".format(args.account_id_hash), params=params)
+    if sub_account_id_hash:
+        params['sub_account_id_hash'] = sub_account_id_hash
+    if range_value is not None:
+        params['range'] = str(range_value)
+    
+    service_detail = s.get(f"https://moneyforward.com/sp/service_detail/{account_id_hash}", params=params)
     return service_detail.json()
 
 
-def request_accounts(s, args):
+def request_accounts(s, account_id, sub_account_id_hash=None):
+    """アカウント情報を取得
+    
+    Args:
+        s: requests.Session
+        account_id: アカウントID
+        sub_account_id_hash: サブアカウントIDハッシュ (optional)
+    """
     params = {}
-    if getattr(args, 'sub_account_id_hash', None):
-        params['sub_account_id_hash'] = args.sub_account_id_hash
-
-    accounts = s.get("https://moneyforward.com/sp2/accounts/{}".format(args.id), params=params)
+    if sub_account_id_hash:
+        params['sub_account_id_hash'] = sub_account_id_hash
+    
+    accounts = s.get(f"https://moneyforward.com/sp2/accounts/{account_id}", params=params)
     return accounts.json()
 
 
@@ -69,14 +83,20 @@ def request_smartphone_asset(s):
     return s.get("https://moneyforward.com/smartphone_asset").json()
 
 
-def request_cf_sum_by_sub_account(s, args):
+def request_cf_sum_by_sub_account(s, sub_account_id_hash=None, year_offset=None):
+    """サブアカウント別キャッシュフロー集計を取得
+    
+    Args:
+        s: requests.Session
+        sub_account_id_hash: サブアカウントIDハッシュ (optional)
+        year_offset: 年オフセット (optional)
+    """
     params = {}
-    if getattr(args, 'sub_account_id_hash', None):
-        params['sub_account_id_hash'] = args.sub_account_id_hash
-
-    if getattr(args, 'year_offset', None):
-        params['year_offset'] = str(args.year_offset)
-
+    if sub_account_id_hash:
+        params['sub_account_id_hash'] = sub_account_id_hash
+    if year_offset is not None:
+        params['year_offset'] = str(year_offset)
+    
     cf_sum_by_sub_account = s.get("https://moneyforward.com/sp/cf_sum_by_sub_account", params=params)
     return cf_sum_by_sub_account.json()
 
