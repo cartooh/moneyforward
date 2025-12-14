@@ -11,8 +11,71 @@ MoneyForward 共通ユーティリティモジュール
 
 import os
 import csv
+from datetime import datetime
 import pandas as pd
 from moneyforward_api import request_large_categories
+
+
+def traverse(output, base, node, skip=()):
+    """
+    辞書やリストを再帰的に探索してフラットな辞書に変換するヘルパー関数
+    
+    Args:
+        output (dict): 結果を格納する辞書
+        base (str): 現在のキーのプレフィックス
+        node (any): 現在のノード（dict, list, or value）
+        skip (tuple): スキップするキーのタプル
+    """
+    if isinstance(node, list):
+        for idx, val in enumerate(node):
+            traverse(output, base + "[%d]" % idx, val, skip=skip)
+    elif isinstance(node, dict):
+        if len(base) > 0:
+            base += "."
+        for key, val in node.items():
+            if key in skip:
+                continue
+            traverse(output, base + key, val, skip=skip)
+    else:
+        output[base] = node
+
+
+def convert_user_asset_act_to_dict(user_asset_act, large, middle):
+    """
+    APIから取得したuser_asset_actをフラットな辞書に変換し、
+    カテゴリ名や日付フォーマットを追加する。
+    
+    Args:
+        user_asset_act (dict): APIレスポンスのuser_asset_act要素
+        large (dict): 大カテゴリIDと名前のマッピング
+        middle (dict): 中カテゴリIDと名前のマッピング
+    
+    Returns:
+        dict: フラット化された辞書
+    """
+    if not 'user_asset_act' in user_asset_act:
+        # pprint(user_asset_act) # pprintはutilsにはないのでコメントアウトか削除
+        raise ValueError('Not Found user_asset_act')
+    
+    user_asset_act_dict = {}
+    traverse(user_asset_act_dict, '', user_asset_act['user_asset_act'])
+    
+    # カテゴリ名解決
+    # IDが存在しない場合のフォールバックが必要かもしれないが、現状のロジックを踏襲
+    lid = user_asset_act_dict.get('large_category_id')
+    mid = user_asset_act_dict.get('middle_category_id')
+    
+    user_asset_act_dict['large_category'] = large.get(lid, '-')
+    user_asset_act_dict['middle_category'] = middle.get(mid, '-')
+    
+    recognized_at = user_asset_act_dict.get('recognized_at')
+    if recognized_at:
+        dt = datetime.fromisoformat(recognized_at)
+        user_asset_act_dict['date'] = dt.strftime("%y/%m/%d")
+        user_asset_act_dict['year'] = dt.strftime("CY%y")
+        user_asset_act_dict['month'] = dt.strftime("%y'%m")
+    
+    return user_asset_act_dict
 
 
 def save_large_categories_csv(fn, large_categories):

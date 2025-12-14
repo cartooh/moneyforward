@@ -38,7 +38,13 @@ def save_json(fn, obj):
 from moneyforward_api import *
 
 # move shared utilities to separate module
-from moneyforward_utils import save_large_categories_csv, search_category_sub, get_middle_category_impl
+from moneyforward_utils import (
+    save_large_categories_csv, 
+    search_category_sub, 
+    get_middle_category_impl,
+    traverse,
+    convert_user_asset_act_to_dict
+)
 
 
 
@@ -167,26 +173,6 @@ def save_account_summaries_csv(fn, account_summaries, args):
             for middle_category in large_category['middle_categories']:
                 writer.writerow([large_category['id'], large_category['name'], 
                     middle_category['id'], middle_category['name'], middle_category['user_category']])
-
-
-def traverse(output, base, node, skip=()):
-    if isinstance(node, list):
-        # print("list", list)
-        for idx, val in enumerate(node):
-            # print("list", idx, val)
-            traverse(output, base + "[%d]" % idx, val, skip=skip)
-    elif isinstance(node, dict):
-        if len(base) > 0:
-            base += "."
-        for key, val in node.items():
-            # print("dict", key, type(val), val)
-            if key in skip:
-                # print("skip", key, skip)
-                continue
-            traverse(output, base + key, val, skip=skip)
-    else:
-        # print("set", base, node)
-        output[base] = node
 
 
 def get_account_summaries_list(account_summaries, args):
@@ -607,25 +593,6 @@ def output_rows_for_user_asset_acts(rows, args):
                 writer.writerow(row)
     else:
         raise ValueError("Invalid args.list or args.csv")
-
-
-def convert_user_asset_act_to_dict(user_asset_act, large, middle):
-    if not 'user_asset_act' in user_asset_act:
-        pprint(user_asset_act)
-        raise ValueError('Not Found user_asset_act')
-    
-    user_asset_act_dict = {}
-    traverse(user_asset_act_dict, '', user_asset_act['user_asset_act'])
-    
-    user_asset_act_dict['large_category'] = large[user_asset_act_dict['large_category_id']]
-    user_asset_act_dict['middle_category'] = middle[user_asset_act_dict['middle_category_id']]
-    
-    recognized_at = user_asset_act_dict['recognized_at']
-    user_asset_act_dict['date'] = datetime.fromisoformat(recognized_at).strftime("%y/%m/%d")
-    user_asset_act_dict['year'] = datetime.fromisoformat(recognized_at).strftime("CY%y")
-    user_asset_act_dict['month'] = datetime.fromisoformat(recognized_at).strftime("%y'%m")
-    
-    return user_asset_act_dict
 
 
 def request_user_asset_acts_by_ids(s, ids):
