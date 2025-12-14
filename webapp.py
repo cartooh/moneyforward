@@ -24,6 +24,13 @@ def get_acts():
     is_old = request.args.get('is_old', type=int)
     is_continuous = request.args.get('is_continuous', type=int)
 
+    # 除外フィルタ (カンマ区切りID)
+    exclude_large = request.args.get('exclude_large', '')
+    exclude_middle = request.args.get('exclude_middle', '')
+    
+    exclude_large_ids = set(int(x) for x in exclude_large.split(',') if x.isdigit())
+    exclude_middle_ids = set(int(x) for x in exclude_middle.split(',') if x.isdigit())
+
     try:
         with session_from_cookie_file(COOKIE_FILE) as s:
             # API呼び出し
@@ -47,11 +54,24 @@ def get_acts():
             append_row_form_user_asset_acts(rows, data, list_header)
             
             # リストのリストを辞書のリストに変換してJSONレスポンス用に整形
-            acts = [dict(zip(list_header, row)) for row in rows]
+            all_acts = [dict(zip(list_header, row)) for row in rows]
+            
+            # フィルタリング実行
+            filtered_acts = []
+            for act in all_acts:
+                lid = act.get('large_category_id')
+                mid = act.get('middle_category_id')
+                
+                if lid in exclude_large_ids:
+                    continue
+                if mid in exclude_middle_ids:
+                    continue
+                filtered_acts.append(act)
             
             return jsonify({
-                'acts': acts, 
-                'total_count': data.get('total_count', 0)
+                'acts': filtered_acts, 
+                'total_count': data.get('total_count', 0),
+                'fetched_count': len(all_acts) # APIから取得した実際の件数（ページネーション制御用）
             })
             
     except Exception as e:

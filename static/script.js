@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isNew: 0,
         isOld: 0,
         isContinuous: 0,
+        excludeLargeIds: new Set(),
+        excludeMiddleIds: new Set(),
         isEditing: false,
         selectedIds: new Set(),
         acts: []
@@ -36,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
         filterIsOld: document.getElementById('filter-is-old'),
         filterIsContinuous: document.getElementById('filter-is-continuous'),
         categoryList: document.getElementById('category-list'),
+        excludeCategoryList: document.getElementById('exclude-category-list'),
         activeFilters: document.getElementById('active-filters')
     };
 
@@ -98,6 +101,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isNew) params.append('is_new', 1);
         if (state.isOld) params.append('is_old', 1);
         if (state.isContinuous) params.append('is_continuous', 1);
+        if (state.excludeLargeIds.size > 0) params.append('exclude_large', Array.from(state.excludeLargeIds).join(','));
+        if (state.excludeMiddleIds.size > 0) params.append('exclude_middle', Array.from(state.excludeMiddleIds).join(','));
 
         try {
             const res = await fetch(`/api/acts?${params.toString()}`);
@@ -109,13 +114,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            if (data.acts.length < state.size) {
+            if (data.acts.length < state.size && data.total_count <= state.offset + data.fetched_count) {
+                // 取得件数が要求より少なく、かつトータル件数に達している場合は終了
+                // ※フィルタリングで減っている可能性があるので、total_count との比較は fetched_count を使う
                 state.hasMore = false;
                 els.endOfList.classList.remove('hidden');
+            } else if (data.fetched_count === 0) {
+                 // APIから0件しか取れなかった場合も終了
+                 state.hasMore = false;
+                 els.endOfList.classList.remove('hidden');
             }
 
             state.acts = [...state.acts, ...data.acts];
-            state.offset += data.acts.length;
+            // offsetはAPIから取得した件数分進める（フィルタリング前の件数）
+            state.offset += (data.fetched_count !== undefined ? data.fetched_count : data.acts.length);
             
             renderActs(data.acts);
 
@@ -240,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const renderCategoryFilter = (categories) => {
+        // 1. 絞り込み用 (Radio)
         els.categoryList.innerHTML = '';
         
         // "指定なし" option
@@ -264,6 +277,103 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             label.querySelector('input').addEventListener('change', () => { state.selectCategory = cat.id; });
             els.categoryList.appendChild(label);
+        });
+
+        // 2. 除外用 (Checkbox Tree)
+        if (!els.excludeCategoryList) return; // 要素がない場合はスキップ
+        els.excludeCategoryList.innerHTML = '';
+
+        categories.forEach(cat => {
+            const container = document.createElement('div');
+            container.className = 'border-b border-gray-100 last:border-0';
+
+            // Large Category Row
+            const header = document.createElement('div');
+            header.className = 'flex items-center p-3 hover:bg-gray-50';
+            
+            // Toggle Button (Accordion)
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'mr-2 text-gray-400 hover:text-gray-600 focus:outline-none';
+            toggleBtn.innerHTML = '<i class="fas fa-chevron-right text-xs"></i>';
+            
+            // Checkbox
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'form-checkbox h-4 w-4 text-red-600 rounded border-gray-300 focus:ring-red-500';
+            checkbox.checked = state.excludeLargeIds.has(cat.id);
+            checkbox.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    state.excludeLargeIds.add(cat.id);
+                } else {
+                    state.excludeLargeIds.delete(cat.id);
+                }
+            });
+
+            // Label
+            const label = document.createElement('span');
+            label.className = 'ml-3 text-sm text-gray-700 flex-1 flex items-center cursor-pointer';
+            label.innerHTML = `<i class="fas ${getIconClass(cat.id)} w-6 text-center text-gray-400 mr-2"></i>${cat.name}`;
+            label.addEventListener('click', () => {
+                // Toggle accordion on label click
+                const subList = container.querySelector('.sub-list');
+                const icon = toggleBtn.querySelector('i');
+                if (subList.classList.contains('hidden')) {
+                    subList.classList.remove('hidden');
+                    icon.classList.remove('fa-chevron-right');
+                    icon.classList.add('fa-chevron-down');
+                } else {
+                    subList.classList.add('hidden');
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-right');
+                }
+            });
+            
+            // Toggle Button Event
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                label.click();
+            });
+
+            header.appendChild(toggleBtn);
+            header.appendChild(checkbox);
+            header.appendChild(label);
+            container.appendChild(header);
+
+            // Middle Categories (Sub List)
+            const subList = document.createElement('div');
+            subList.className = 'sub-list hidden pl-10 pr-3 pb-2 bg-gray-50';
+            
+            if (cat.middle_categories && cat.middle_categories.length > 0) {
+                cat.middle_categories.forEach(mid => {
+                    const midRow = document.createElement('div');
+                    midRow.className = 'flex items-center py-2';
+                    
+                    const midCheckbox = document.createElement('input');
+                    midCheckbox.type = 'checkbox';
+                    midCheckbox.className = 'form-checkbox h-3 w-3 text-red-600 rounded border-gray-300 focus:ring-red-500';
+                    midCheckbox.checked = state.excludeMiddleIds.has(mid.id);
+                    midCheckbox.addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            state.excludeMiddleIds.add(mid.id);
+                        } else {
+                            state.excludeMiddleIds.delete(mid.id);
+                        }
+                    });
+
+                    const midLabel = document.createElement('span');
+                    midLabel.className = 'ml-2 text-xs text-gray-600';
+                    midLabel.textContent = mid.name;
+
+                    midRow.appendChild(midCheckbox);
+                    midRow.appendChild(midLabel);
+                    subList.appendChild(midRow);
+                });
+            } else {
+                subList.innerHTML = '<div class="text-xs text-gray-400 py-1">中項目なし</div>';
+            }
+
+            container.appendChild(subList);
+            els.excludeCategoryList.appendChild(container);
         });
     };
 
