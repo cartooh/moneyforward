@@ -9,7 +9,7 @@ COOKIE_FILE = 'mf_cookies.pkl'
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', now=datetime.now().timestamp())
 
 @app.route('/api/acts')
 def get_acts():
