@@ -133,5 +133,6 @@ dmypy.json
 *.bak
 *.db
 *.odc
+*.json
 my.*
 
