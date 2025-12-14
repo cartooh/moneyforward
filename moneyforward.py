@@ -30,10 +30,6 @@ logger = logging.getLogger(__name__)
 formatter = '%(levelname)s : %(asctime)s : %(message)s'
 logging.basicConfig(level=logging.INFO, format=formatter)
 
-def save_json(fn, obj):
-    with open(fn, 'w') as f:
-        json.dump(obj, f)
-
 # move HTTP request helpers to separate module
 from moneyforward_api import *
 
@@ -43,7 +39,11 @@ from moneyforward_utils import (
     search_category_sub, 
     get_middle_category_impl,
     traverse,
-    convert_user_asset_act_to_dict
+    convert_user_asset_act_to_dict,
+    save_json,
+    get_categories_form_session,
+    append_row_form_user_asset_acts,
+    output_rows
 )
 
 
@@ -532,67 +532,7 @@ def search_category(s, args):
     for index, row in df.iterrows():
         print(*row.tolist())
 
-def get_categories_form_user_asset_acts(user_asset_acts):
-    large = { int(k):v for k, v in user_asset_acts['large'].items()}
-    large[0] = '-'
-    middle = { int(k):v for k, v in user_asset_acts['middle'].items()}
-    middle[0] = '-'
-    return large, middle
 
-
-def get_categories_form_session(s):
-    user_asset_acts = request_user_asset_acts(s, size=1)
-    return get_categories_form_user_asset_acts(user_asset_acts)
-
-
-def append_row_form_user_asset_acts(rows, user_asset_acts, args):
-    large, middle = get_categories_form_user_asset_acts(user_asset_acts)
-    
-    for act in user_asset_acts['user_asset_acts']:
-        row = []
-        for h in args.list_header:
-            if h in act:
-                row.append(act[h])
-                continue
-            
-            if h == 'large_category':
-                row.append(large[act['large_category_id']])
-                continue
-            
-            if h == 'middle_category':
-                row.append(middle[act['middle_category_id']])
-                continue
-            
-            if '.' in h:
-                node = act
-                for k in h.split('.'):
-                    if node is None:
-                        node = '_'
-                        break
-                    if k not in node:
-                        logger.warning('Not found key: %s' % h)
-                        node = '?'
-                        break
-                    node = node[k]
-                row.append(node)
-                continue
-            
-            raise ValueError("Not found key: %s" % h)
-        rows.append(row)
-
-
-def output_rows_for_user_asset_acts(rows, args):
-    if args.list:
-        for row in rows:
-            print(*row)
-    elif args.csv:
-        with open(args.csv, 'wt', encoding='utf_8_sig') as f:
-            writer = csv.writer(f, lineterminator="\n")
-            writer.writerow(args.list_header)
-            for row in rows:
-                writer.writerow(row)
-    else:
-        raise ValueError("Invalid args.list or args.csv")
 
 
 def request_user_asset_acts_by_ids(s, ids):
@@ -636,7 +576,7 @@ def get_user_asset_acts(s, args):
                 args.size = min(size, MAX_SIZE)
                 args.offset = offset
                 user_asset_acts = request_user_asset_acts_from_args(s, args)
-                append_row_form_user_asset_acts(rows, user_asset_acts, args)
+                append_row_form_user_asset_acts(rows, user_asset_acts, args.list_header)
                 offset += MAX_SIZE
                 size -= MAX_SIZE
                 
@@ -647,8 +587,10 @@ def get_user_asset_acts(s, args):
             args.size = original_size
         else:
             user_asset_acts = request_user_asset_acts_from_args(s, args)
-            append_row_form_user_asset_acts(rows, user_asset_acts, args)
-        output_rows_for_user_asset_acts(rows, args)
+            append_row_form_user_asset_acts(rows, user_asset_acts, args.list_header)
+        
+        output_format = 'csv' if args.csv else 'list'
+        output_rows(rows, args.list_header, output_format=output_format, csv_file=args.csv)
         return
     
     user_asset_acts = request_user_asset_acts_from_args(s, args)

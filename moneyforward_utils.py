@@ -11,9 +11,13 @@ MoneyForward 共通ユーティリティモジュール
 
 import os
 import csv
+import json
+import logging
 from datetime import datetime
 import pandas as pd
-from moneyforward_api import request_large_categories
+from moneyforward_api import request_large_categories, request_user_asset_acts
+
+logger = logging.getLogger(__name__)
 
 
 def traverse(output, base, node, skip=()):
@@ -168,3 +172,77 @@ def get_middle_category_impl(s, cache_csv, force_update, category_name, is_incom
         int(category_df.iloc[0].large_category_id),
         int(category_df.iloc[0].middle_category_id)
     )
+
+
+def save_json(fn, obj):
+    """JSON保存"""
+    with open(fn, 'w') as f:
+        json.dump(obj, f)
+
+
+def get_categories_form_user_asset_acts(user_asset_acts):
+    """user_asset_actsレスポンスからカテゴリ辞書を取得"""
+    large = { int(k):v for k, v in user_asset_acts['large'].items()}
+    large[0] = '-'
+    middle = { int(k):v for k, v in user_asset_acts['middle'].items()}
+    middle[0] = '-'
+    return large, middle
+
+
+def get_categories_form_session(s):
+    """セッションからカテゴリ情報を取得（user_asset_acts経由）"""
+    user_asset_acts = request_user_asset_acts(s, size=1)
+    return get_categories_form_user_asset_acts(user_asset_acts)
+
+
+def append_row_form_user_asset_acts(rows, user_asset_acts, list_header):
+    """user_asset_actsから行データを抽出"""
+    large, middle = get_categories_form_user_asset_acts(user_asset_acts)
+    
+    for act in user_asset_acts['user_asset_acts']:
+        row = [] 
+        for h in list_header:
+            if h in act:
+                row.append(act[h])
+                continue
+            
+            if h == 'large_category':
+                row.append(large[act['large_category_id']])
+                continue
+            
+            if h == 'middle_category':
+                row.append(middle[act['middle_category_id']])
+                continue
+            
+            if '.' in h:
+                node = act
+                for k in h.split('.'):
+                    if node is None:
+                        node = '_'
+                        break
+                    if k not in node:
+                        logger.warning('Not found key: %s' % h)
+                        node = '?'
+                        break
+                    node = node[k]
+                row.append(node)
+                continue
+            
+            raise ValueError("Not found key: %s" % h)
+        rows.append(row)
+
+
+def output_rows(rows, list_header, output_format='list', csv_file=None):
+    """行データを出力"""
+    if output_format == 'list':
+        print(*list_header)
+        for row in rows:
+            print(*row)
+    elif output_format == 'csv':
+        with open(csv_file, 'wt', encoding='utf_8_sig') as f:
+            writer = csv.writer(f, lineterminator="\n")
+            writer.writerow(list_header)
+            for row in rows:
+                writer.writerow(row)
+    else:
+        raise ValueError(f"Unknown output format: {output_format}")
