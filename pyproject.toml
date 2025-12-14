@@ -11,5 +11,8 @@ dependencies = [
     "selenium>=4.29.0",
     "keyring>=25.6.0",
     "requests>=2.32.3",
-    "tqdm>=4.67.1"
+    "tqdm>=4.67.1",
+    "flask>=1.1.4",
+    "jinja2==2.11.3",
+    "markupsafe==2.0.1",
 ]
