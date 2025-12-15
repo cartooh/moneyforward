@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (state.baseDate) params.append('base_date', state.baseDate);
-        if (state.selectCategory) params.append('select_category', state.selectCategory);
+        if (state.selectCategory !== null) params.append('select_category', state.selectCategory);
         if (state.isNew) params.append('is_new', 1);
         if (state.isOld) params.append('is_old', 1);
         if (state.isContinuous) params.append('is_continuous', 1);
