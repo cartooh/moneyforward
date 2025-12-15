@@ -360,9 +360,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (cat.middle_categories && cat.middle_categories.length > 0) {
                 cat.middle_categories.forEach(mid => {
-                    const midRow = document.createElement('div');
-                    midRow.className = 'flex items-center py-2';
-                    
+                    // Wrap input + text in a label so text click toggles checkbox
+                    const midItem = document.createElement('label');
+                    midItem.className = 'flex items-center py-2 cursor-pointer';
+
                     const midCheckbox = document.createElement('input');
                     midCheckbox.type = 'checkbox';
                     midCheckbox.className = 'form-checkbox h-3 w-3 text-red-600 rounded border-gray-300 focus:ring-red-500';
@@ -375,13 +376,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
 
-                    const midLabel = document.createElement('span');
-                    midLabel.className = 'ml-2 text-xs text-gray-600';
-                    midLabel.textContent = mid.name;
+                    const midText = document.createElement('span');
+                    midText.className = 'ml-2 text-xs text-gray-600';
+                    midText.textContent = mid.name;
 
-                    midRow.appendChild(midCheckbox);
-                    midRow.appendChild(midLabel);
-                    subList.appendChild(midRow);
+                    midItem.appendChild(midCheckbox);
+                    midItem.appendChild(midText);
+                    subList.appendChild(midItem);
                 });
             } else {
                 subList.innerHTML = '<div class="text-xs text-gray-400 py-1">中項目なし</div>';
