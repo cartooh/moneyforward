@@ -100,6 +100,46 @@ moneyforward/
     *   検索ボックスに入力時、階層を無視してマッチする中項目をフラットなリストで表示する。
     *   表示形式: `大項目名 > 中項目名`
 
+### 4.5. 詳細・編集機能
+*   **起動**: 通常モード（編集モードOFF）にて、一覧の行（明細）をタップすると詳細モーダルを表示。
+*   **UI**:
+    *   **ヘッダー**: 「入出金明細」タイトル、閉じるボタン。
+    *   **表示項目**:
+        *   金額（大きく表示）。
+        *   大カテゴリ・中カテゴリ（タップで変更可能）。
+        *   日付。
+        *   内容（摘要）。
+        *   口座・保有資産情報。
+        *   計算対象フラグ（トグルスイッチ）。
+        *   メモ（テキストエリア）。
+    *   **振替設定エリア**:
+        *   現在の状態（支出/収入/振替）を表示。
+        *   「振替」への切り替え、または「振替解除」ボタン。
+        *   振替の場合、振替元/振替先の口座情報を表示。
+    *   **フッター**: 「保存」ボタン。
+
+*   **振替設定フロー**:
+    1.  詳細画面で「振替に変更」または振替情報の編集ボタンをタップ。
+    2.  **振替設定サブ画面（またはモーダル）**を表示。
+        *   API `request_manual_user_asset_act_partner_sources` をコールして候補を取得。
+        *   **推奨候補**: `partner_candidate_acts` がある場合、優先表示（日付・金額一致）。
+        *   **全口座リスト**: その他の口座を選択可能。
+    3.  口座を選択して「決定」。
+    4.  API `request_change_transfer` を実行（即時反映）。
+    5.  詳細画面に戻り、表示を更新（振替状態になる）。
+
+*   **振替解除フロー**:
+    1.  詳細画面で「振替解除」ボタンをタップ。
+    2.  API `request_clear_transfer` を実行（即時反映）。
+    3.  詳細画面の表示を更新（支出または収入に戻る）。
+
+*   **その他の更新フロー**:
+    1.  カテゴリ、計算対象、メモを編集。
+    2.  「保存」ボタンタップ。
+    3.  API `get_csrf_token` でトークン取得（セッション内でキャッシュ可）。
+    4.  API `request_update_user_asset_act` を実行。
+    5.  成功時、モーダルを閉じ、一覧データを更新（再取得またはローカル更新）。
+
 ## 5. データ連携
 *   **認証**: サーバー上の `mf_cookies.pkl` を読み込んでセッションを確立。
 *   **API**: 
@@ -155,6 +195,37 @@ moneyforward/
             }
             ```
             ※エラー時は `{"status": "error", "message": "エラーメッセージ"}` を返す。
+
+    *   **GET `/api/act/<id>/partner_sources`**: 振替候補取得
+        *   `moneyforward_api.request_manual_user_asset_act_partner_sources` をラップ。
+        *   レスポンス: `manual_user_asset_act_partner_sources.json` の内容。
+
+    *   **POST `/api/act/<id>/transfer`**: 振替設定
+        *   リクエストボディ:
+            ```json
+            {
+              "partner_account_id_hash": "...",
+              "partner_sub_account_id_hash": "...",
+              "partner_act_id": "..." (optional)
+            }
+            ```
+        *   `moneyforward_api.request_change_transfer` をラップ。
+
+    *   **DELETE `/api/act/<id>/transfer`**: 振替解除
+        *   `moneyforward_api.request_clear_transfer` をラップ。
+
+    *   **PUT `/api/act/<id>`**: 明細更新（カテゴリ、メモ、フラグ）
+        *   リクエストボディ:
+            ```json
+            {
+              "large_category_id": "...",
+              "middle_category_id": "...",
+              "is_target": 1,
+              "memo": "..."
+            }
+            ```
+        *   `moneyforward_api.request_update_user_asset_act` をラップ。
+        *   サーバー側で `get_csrf_token` を自動処理。
 
 ## 6. 制約事項
 *   `moneyforward.py` はインポートしない（SQLite依存回避のため）。
