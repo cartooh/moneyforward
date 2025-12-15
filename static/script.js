@@ -15,7 +15,9 @@ document.addEventListener('DOMContentLoaded', () => {
         excludeMiddleIds: new Set(),
         isEditing: false,
         selectedIds: new Set(),
-        acts: []
+        acts: [],
+        allCategories: [], // Store all categories for bulk update modal
+        categoryHistory: JSON.parse(localStorage.getItem('categoryHistory') || '[]') // Load history from local storage
     };
 
     // DOM Elements
@@ -39,7 +41,19 @@ document.addEventListener('DOMContentLoaded', () => {
         filterIsContinuous: document.getElementById('filter-is-continuous'),
         categoryList: document.getElementById('category-list'),
         excludeCategoryList: document.getElementById('exclude-category-list'),
-        activeFilters: document.getElementById('active-filters')
+        activeFilters: document.getElementById('active-filters'),
+        // Bulk Update Modal Elements
+        btnBulkCategoryChange: document.getElementById('btn-bulk-category-change'),
+        categoryModal: document.getElementById('category-modal'),
+        categorySearchInput: document.getElementById('category-search-input'),
+        categorySearchClear: document.getElementById('category-search-clear'),
+        categoryHistoryList: document.getElementById('category-history-list'),
+        largeCategoryList: document.getElementById('large-category-list'),
+        middleCategoryList: document.getElementById('middle-category-list'),
+        categoryModalClose: document.getElementById('category-modal-close'),
+        categoryModalBack: document.getElementById('category-modal-back'),
+        toast: document.getElementById('toast'),
+        toastMessage: document.getElementById('toast-message')
     };
 
     // Icon Mapping (Large Category ID -> FontAwesome Class)
@@ -144,6 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/categories');
             const data = await res.json();
+            state.allCategories = data; // Save for bulk update
             renderCategoryFilter(data);
         } catch (e) {
             console.error(e);
@@ -505,4 +520,272 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial Load
     fetchActs();
+
+    // --- Bulk Category Update Logic ---
+
+    const openCategoryModal = () => {
+        if (state.selectedIds.size === 0) {
+            alert('取引を選択してください');
+            return;
+        }
+        
+        // Ensure categories are loaded
+        if (state.allCategories.length === 0) {
+            fetchCategories().then(() => {
+                renderCategoryModalMain();
+            });
+        } else {
+            renderCategoryModalMain();
+        }
+        
+        els.categoryModal.classList.remove('hidden');
+        els.categorySearchInput.value = '';
+        els.categorySearchInput.focus();
+    };
+
+    const closeCategoryModal = () => {
+        els.categoryModal.classList.add('hidden');
+        // Reset view to main list
+        els.largeCategoryList.classList.remove('hidden');
+        els.middleCategoryList.classList.add('hidden');
+        els.categoryModalBack.classList.add('hidden');
+        els.categoryHistoryList.parentElement.classList.remove('hidden'); // Show history container
+    };
+
+    const renderCategoryModalMain = () => {
+        renderCategoryHistory();
+        renderLargeCategories();
+        // Reset middle category list
+        els.middleCategoryList.innerHTML = '';
+    };
+
+    const renderCategoryHistory = () => {
+        els.categoryHistoryList.innerHTML = '';
+        if (state.categoryHistory.length === 0) {
+            els.categoryHistoryList.innerHTML = '<div class="text-xs text-gray-400 p-2">履歴なし</div>';
+            return;
+        }
+
+        state.categoryHistory.forEach(hist => {
+            const btn = document.createElement('button');
+            btn.className = 'flex items-center p-2 bg-gray-50 rounded border border-gray-200 mr-2 mb-2 text-sm hover:bg-blue-50 hover:border-blue-200 transition-colors';
+            btn.innerHTML = `
+                <i class="fas ${getIconClass(hist.large_id)} text-gray-400 mr-2"></i>
+                <span class="text-gray-700">${hist.large_name} / ${hist.middle_name}</span>
+            `;
+            btn.addEventListener('click', () => {
+                executeBulkUpdate(hist.large_id, hist.middle_id, hist.large_name, hist.middle_name);
+            });
+            els.categoryHistoryList.appendChild(btn);
+        });
+    };
+
+    const renderLargeCategories = () => {
+        els.largeCategoryList.innerHTML = '';
+        state.allCategories.forEach(cat => {
+            const btn = document.createElement('button');
+            btn.className = 'w-full flex items-center justify-between p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left';
+            btn.innerHTML = `
+                <div class="flex items-center">
+                    <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-3">
+                        <i class="fas ${getIconClass(cat.id)} text-gray-500"></i>
+                    </div>
+                    <span class="text-gray-900 font-medium">${cat.name}</span>
+                </div>
+                <i class="fas fa-chevron-right text-gray-300"></i>
+            `;
+            btn.addEventListener('click', () => {
+                showMiddleCategories(cat);
+            });
+            els.largeCategoryList.appendChild(btn);
+        });
+    };
+
+    const showMiddleCategories = (largeCategory) => {
+        els.largeCategoryList.classList.add('hidden');
+        els.categoryHistoryList.parentElement.classList.add('hidden'); // Hide history
+        els.middleCategoryList.classList.remove('hidden');
+        els.categoryModalBack.classList.remove('hidden');
+        
+        els.middleCategoryList.innerHTML = '';
+        
+        // Header for middle list (optional, maybe just back button is enough)
+        
+        if (largeCategory.middle_categories && largeCategory.middle_categories.length > 0) {
+            largeCategory.middle_categories.forEach(mid => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full flex items-center p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left';
+                btn.innerHTML = `<span class="text-gray-900">${mid.name}</span>`;
+                btn.addEventListener('click', () => {
+                    executeBulkUpdate(largeCategory.id, mid.id, largeCategory.name, mid.name);
+                });
+                els.middleCategoryList.appendChild(btn);
+            });
+        } else {
+             els.middleCategoryList.innerHTML = '<div class="p-4 text-gray-500">中項目はありません</div>';
+        }
+    };
+
+    const filterCategories = (keyword) => {
+        if (!keyword) {
+            // Reset to initial state
+            els.largeCategoryList.classList.remove('hidden');
+            els.middleCategoryList.classList.add('hidden');
+            els.categoryHistoryList.parentElement.classList.remove('hidden');
+            els.categoryModalBack.classList.add('hidden');
+            renderLargeCategories();
+            return;
+        }
+
+        // Search mode: Show flattened list of matches
+        els.largeCategoryList.classList.add('hidden');
+        els.categoryHistoryList.parentElement.classList.add('hidden');
+        els.middleCategoryList.classList.remove('hidden');
+        els.categoryModalBack.classList.add('hidden'); // No back button in search mode (clear search to go back)
+
+        els.middleCategoryList.innerHTML = '';
+        let hasMatch = false;
+
+        state.allCategories.forEach(large => {
+            if (large.middle_categories) {
+                large.middle_categories.forEach(mid => {
+                    if (mid.name.includes(keyword) || large.name.includes(keyword)) {
+                        hasMatch = true;
+                        const btn = document.createElement('button');
+                        btn.className = 'w-full flex items-center p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left';
+                        // Highlight match? For now just simple text
+                        btn.innerHTML = `
+                            <div class="flex flex-col">
+                                <span class="text-gray-900 font-medium">${mid.name}</span>
+                                <span class="text-xs text-gray-500">${large.name}</span>
+                            </div>
+                        `;
+                        btn.addEventListener('click', () => {
+                            executeBulkUpdate(large.id, mid.id, large.name, mid.name);
+                        });
+                        els.middleCategoryList.appendChild(btn);
+                    }
+                });
+            }
+        });
+
+        if (!hasMatch) {
+            els.middleCategoryList.innerHTML = '<div class="p-4 text-gray-500 text-center">一致するカテゴリはありません</div>';
+        }
+    };
+
+    const executeBulkUpdate = async (largeId, middleId, largeName, middleName) => {
+        if (!confirm(`${state.selectedIds.size}件の取引を「${largeName} / ${middleName}」に変更しますか？`)) {
+            return;
+        }
+
+        // Update History
+        const newHistoryItem = { large_id: largeId, middle_id: middleId, large_name: largeName, middle_name: middleName };
+        // Remove existing if same
+        state.categoryHistory = state.categoryHistory.filter(h => !(h.large_id === largeId && h.middle_id === middleId));
+        // Add to front
+        state.categoryHistory.unshift(newHistoryItem);
+        // Limit to 5
+        if (state.categoryHistory.length > 5) state.categoryHistory.pop();
+        localStorage.setItem('categoryHistory', JSON.stringify(state.categoryHistory));
+
+        // API Call
+        try {
+            const res = await fetch('/api/bulk_update_category', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ids: Array.from(state.selectedIds),
+                    large_category_id: largeId,
+                    middle_category_id: middleId
+                }),
+            });
+            
+            const data = await res.json();
+            
+            if (data.status === 'success') {
+                closeCategoryModal();
+                showToast(`${data.updated_count}件のカテゴリを更新しました`);
+                
+                // Update UI without reload
+                // We need to update the DOM elements for the selected IDs
+                state.selectedIds.forEach(id => {
+                    const row = document.querySelector(`div[data-id="${id}"]`);
+                    if (row) {
+                        // Update Icon
+                        const iconWrapper = row.querySelector('.fa-circle, .fas').parentElement;
+                        // Remove old icon class and add new one
+                        const icon = iconWrapper.querySelector('i');
+                        icon.className = `fas ${getIconClass(largeId)}`;
+                        
+                        // Update Text
+                        const subContent = row.querySelector('.text-xs.text-gray-500');
+                        if (subContent) {
+                            subContent.textContent = `${largeName} / ${middleName}`;
+                        }
+                    }
+                });
+
+                // Exit edit mode
+                els.editModeToggle.click();
+
+            } else {
+                alert('更新に失敗しました: ' + (data.message || '不明なエラー'));
+            }
+
+        } catch (e) {
+            console.error(e);
+            alert('通信エラーが発生しました');
+        }
+    };
+
+    const showToast = (message) => {
+        els.toastMessage.textContent = message;
+        els.toast.classList.remove('translate-y-full', 'opacity-0');
+        setTimeout(() => {
+            els.toast.classList.add('translate-y-full', 'opacity-0');
+        }, 3000);
+    };
+
+    // Event Listeners for Bulk Update
+    if (els.btnBulkCategoryChange) {
+        els.btnBulkCategoryChange.addEventListener('click', openCategoryModal);
+    }
+
+    if (els.categoryModalClose) {
+        els.categoryModalClose.addEventListener('click', closeCategoryModal);
+    }
+
+    if (els.categoryModalBack) {
+        els.categoryModalBack.addEventListener('click', () => {
+            els.largeCategoryList.classList.remove('hidden');
+            els.middleCategoryList.classList.add('hidden');
+            els.categoryModalBack.classList.add('hidden');
+            els.categoryHistoryList.parentElement.classList.remove('hidden');
+        });
+    }
+
+    if (els.categorySearchInput) {
+        els.categorySearchInput.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if (val) {
+                els.categorySearchClear.classList.remove('hidden');
+            } else {
+                els.categorySearchClear.classList.add('hidden');
+            }
+            filterCategories(val);
+        });
+    }
+
+    if (els.categorySearchClear) {
+        els.categorySearchClear.addEventListener('click', () => {
+            els.categorySearchInput.value = '';
+            els.categorySearchClear.classList.add('hidden');
+            filterCategories('');
+            els.categorySearchInput.focus();
+        });
+    }
+
 });

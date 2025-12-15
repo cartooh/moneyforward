@@ -67,41 +67,94 @@ moneyforward/
 *   **起動**: 右上の「鉛筆マーク」タップでモード移行。
 *   **UI変化**:
     *   各行の左端にチェックボックスが出現（アニメーション等でスムーズに）。
-    *   画面下部に「変更メニュー」エリアが表示される。
+    *   画面下部に「変更メニュー」エリア（フッター）が表示される。
 *   **操作**:
     *   任意の行を複数選択可能。
+    *   フッターの「カテゴリ変更」ボタン押下でカテゴリ選択モーダルを表示。
     *   ヘッダー等の「キャンセル」または「完了」で通常モードへ戻る。
-    *   **注記**: 具体的な一括編集処理（カテゴリ変更APIの呼び出し等）の実装詳細は別途指示待ち。今回はボタン配置のみ検討。
+
+### 4.4. カテゴリ一括変更機能
+*   **UI**: 全画面風モーダルウィンドウ。
+*   **カテゴリ選択フロー (ドリルダウン形式)**:
+    1.  **初期表示**:
+        *   検索ボックス（中項目インクリメンタル検索）。
+        *   「最近使用したカテゴリ」（LocalStorage履歴）。
+        *   大項目一覧リスト。
+    2.  **大項目選択後**:
+        *   画面が遷移し、ヘッダーに「戻る」ボタンと選択した大項目名を表示。
+        *   該当する中項目一覧リストを表示。
+    3.  **中項目選択 (確定)**:
+        *   APIを実行して更新。
+        *   LocalStorageに選択したカテゴリを保存（LRU）。
+        *   モーダルを閉じ、Toast通知を表示（「〇件更新しました」）。
+        *   **注記**: 画面のリロードは行わない。
+*   **「最近使用したカテゴリ」の仕様**:
+    *   **保存対象**: ユーザーが選択して更新を実行した「中項目」。
+    *   **保存場所**: ブラウザの LocalStorage。
+    *   **保存件数**: 最大5件。
+    *   **更新ロジック**:
+        *   更新実行時に、選択された中項目をリストの先頭に追加。
+        *   既にリストに存在する場合は、既存の項目を削除して先頭に追加（順序更新）。
+        *   5件を超える場合は、最も古い項目を削除（LRU方式）。
+*   **検索挙動**:
+    *   検索ボックスに入力時、階層を無視してマッチする中項目をフラットなリストで表示する。
+    *   表示形式: `大項目名 > 中項目名`
 
 ## 5. データ連携
 *   **認証**: サーバー上の `mf_cookies.pkl` を読み込んでセッションを確立。
-*   **API**: `moneyforward_api.py` の `request_user_asset_acts` を使用。
+*   **API**: 
+    *   参照: `moneyforward_api.py` の `request_user_asset_acts`
+    *   更新: `moneyforward_api.py` の `request_transactions_category_bulk_updates`
 *   **データ変換**: `moneyforward_utils.py` の `append_row_form_user_asset_acts` を使用してデータを抽出し、JSON形式に変換してフロントエンドに返す。
-*   **APIレスポンス構造 (`/api/acts`)**:
-    ```json
-    {
-      "acts": [
-        {
-          "id": 123456789,
-          "is_transfer": false,
-          "is_income": false,
-          "is_target": true,
-          "updated_at": "2025-11-30T12:34:56+09:00",
-          "content": "コンビニ",
-          "amount": -500,
-          "large_category_id": 1,
-          "large_category": "食費",
-          "middle_category_id": 10,
-          "middle_category": "食料品",
-          "account.service.service_name": "財布",
-          "sub_account.sub_type": "wallet",
-          "sub_account.sub_name": "現金"
-        },
-        ...
-      ],
-      "total_count": 100
-    }
-    ```
+*   **APIエンドポイント仕様**:
+    *   **GET `/api/acts`**: 取引履歴取得
+        *   レスポンス構造:
+            ```json
+            {
+              "acts": [
+                {
+                  "id": "123456789",
+                  "is_transfer": 0,
+                  "is_income": 0,
+                  "is_target": 1,
+                  "updated_at": "2025-11-30T12:34:56+09:00",
+                  "content": "コンビニ",
+                  "amount": "-500",
+                  "large_category_id": "1",
+                  "large_category": "食費",
+                  "middle_category_id": "10",
+                  "middle_category": "食料品",
+                  "account.service.service_name": "財布",
+                  "sub_account.sub_type": "wallet",
+                  "sub_account.sub_name": "現金"
+                },
+                ...
+              ],
+              "total_count": 100,
+              "fetched_count": 20
+            }
+            ```
+            ※ `id`, `amount`, `large_category_id`, `middle_category_id` はJavaScriptでの精度落ちを防ぐため文字列として返す。
+            ※ `is_...` フラグは数値 (0/1) で返す。
+
+    *   **POST `/api/bulk_update_category`**: カテゴリ一括更新
+        *   リクエストボディ (JSON):
+            ```json
+            {
+              "ids": ["123456789", "987654321"],
+              "large_category_id": 1,
+              "middle_category_id": 10
+            }
+            ```
+            ※ `ids` は文字列の配列でも可（サーバー側で数値に変換）。
+        *   レスポンス:
+            ```json
+            {
+              "status": "success",
+              "updated_count": 2
+            }
+            ```
+            ※エラー時は `{"status": "error", "message": "エラーメッセージ"}` を返す。
 
 ## 6. 制約事項
 *   `moneyforward.py` はインポートしない（SQLite依存回避のため）。

@@ -63,7 +63,7 @@
             <span id="selected-count">0</span> 件選択中
         </div>
         <div class="flex space-x-4">
-            <button class="text-blue-500 font-medium text-sm">カテゴリ変更</button>
+            <button id="btn-bulk-category-change" class="text-blue-500 font-medium text-sm">カテゴリ変更</button>
             <button class="text-red-500 font-medium text-sm">削除</button>
         </div>
     </div>
@@ -118,6 +118,44 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Category Selection Modal (Full Screen) -->
+    <div id="category-modal" class="fixed inset-0 bg-white z-50 hidden flex flex-col">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
+            <button id="category-modal-back" class="text-blue-600 font-medium hidden">
+                <i class="fas fa-chevron-left mr-1"></i>戻る
+            </button>
+            <button id="category-modal-close" class="text-blue-600 font-medium" style="margin-left: auto;">キャンセル</button>
+        </div>
+        
+        <!-- Search -->
+        <div class="px-4 py-2 bg-gray-50 border-b border-gray-200">
+            <div class="relative">
+                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                <input type="text" id="category-search-input" placeholder="カテゴリを検索" 
+                    class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto">
+            <!-- History Section -->
+            <div id="category-history-section">
+                <div class="px-4 py-2 bg-gray-50 text-xs font-bold text-gray-500">最近使用したカテゴリ</div>
+                <div id="category-history-list" class="flex flex-wrap p-2"></div>
+            </div>
+
+            <!-- Main List -->
+            <div id="large-category-list"></div>
+            <div id="middle-category-list" class="hidden"></div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm opacity-0 transition-opacity duration-300 pointer-events-none z-50">
+        <span id="toast-message">通知メッセージ</span>
     </div>
 
     <script src="/static/script.js?v={{ now }}"></script>
