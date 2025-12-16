@@ -121,7 +121,7 @@
     </div>
 
     <!-- Category Selection Modal (Full Screen) -->
-    <div id="category-modal" class="fixed inset-0 bg-white z-50 hidden flex flex-col">
+    <div id="category-modal" class="fixed inset-0 bg-white z-[60] hidden flex flex-col">
         <!-- Header -->
         <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
             <button id="category-modal-back" class="text-blue-600 font-medium hidden">
@@ -154,8 +154,124 @@
     </div>
 
     <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm opacity-0 transition-opacity duration-300 pointer-events-none z-50">
+    <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm opacity-0 transition-opacity duration-300 pointer-events-none z-[70]">
         <span id="toast-message">通知メッセージ</span>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="detail-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-end sm:items-center justify-center">
+        <div class="bg-white w-full sm:w-96 sm:rounded-lg rounded-t-xl max-h-[90vh] overflow-y-auto flex flex-col">
+            <!-- Header -->
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-10">
+                <button id="detail-close" class="text-gray-500"><i class="fas fa-times"></i></button>
+                <h2 class="font-bold text-lg">入出金明細</h2>
+                <div class="w-6"></div> <!-- Spacer for centering -->
+            </div>
+            
+            <!-- Content -->
+            <div class="p-4 space-y-6">
+                <!-- Amount & Type -->
+                <div class="text-center">
+                    <div id="detail-type" class="text-sm text-gray-500 mb-1">支出</div>
+                    <div id="detail-amount" class="text-4xl font-bold text-gray-800">¥0</div>
+                </div>
+
+                <!-- Category -->
+                <div class="border-t border-b border-gray-100 py-3">
+                    <button id="detail-category-btn" class="w-full flex items-center justify-between py-2 active:bg-gray-50">
+                        <div class="flex items-center">
+                            <div id="detail-icon-wrapper" class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mr-3 text-gray-500">
+                                <i id="detail-icon" class="fas fa-question"></i>
+                            </div>
+                            <div class="text-left">
+                                <div id="detail-large-category" class="text-sm text-gray-500">未分類</div>
+                                <div id="detail-middle-category" class="font-bold text-gray-800">未分類</div>
+                            </div>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-400"></i>
+                    </button>
+                </div>
+
+                <!-- Basic Info -->
+                <div class="space-y-4">
+                    <div class="flex items-center py-1">
+                        <i class="far fa-calendar w-8 text-center text-gray-400"></i>
+                        <div id="detail-date" class="text-gray-800">2025/01/01</div>
+                    </div>
+                    <div class="flex items-center py-1">
+                        <i class="far fa-file-alt w-8 text-center text-gray-400"></i>
+                        <div id="detail-content" class="text-gray-800 break-all">内容</div>
+                    </div>
+                    <div class="flex items-center py-1">
+                        <i class="fas fa-wallet w-8 text-center text-gray-400"></i>
+                        <div class="text-gray-800">
+                            <div id="detail-account" class="text-sm text-gray-500">口座</div>
+                            <div id="detail-sub-account">サブ口座</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transfer Section -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm font-bold text-gray-700">振替設定</span>
+                        <button id="detail-transfer-toggle-btn" class="text-xs bg-white border border-gray-300 px-2 py-1 rounded shadow-sm text-blue-600">
+                            振替に変更
+                        </button>
+                    </div>
+                    <div id="detail-transfer-info" class="hidden text-sm text-gray-600 mt-2">
+                        <div class="flex items-center mb-1">
+                            <span class="w-12 text-gray-400">振替元</span>
+                            <span id="detail-transfer-source" class="font-medium">--</span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="w-12 text-gray-400">振替先</span>
+                            <span id="detail-transfer-dest" class="font-medium">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings -->
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <i class="fas fa-calculator w-8 text-center text-gray-400"></i>
+                            <span class="text-gray-800">計算対象</span>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="detail-is-target" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                        </label>
+                    </div>
+                    
+                    <div class="flex items-start">
+                        <i class="fas fa-pen w-8 text-center text-gray-400 mt-1"></i>
+                        <textarea id="detail-memo" rows="3" placeholder="メモを入力" class="flex-1 border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-4 border-t border-gray-200 sticky bottom-0 bg-white z-10">
+                <button id="detail-save-btn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors">
+                    保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transfer Selection Modal -->
+    <div id="transfer-modal" class="fixed inset-0 bg-white z-[60] hidden flex flex-col">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
+            <button id="transfer-modal-close" class="text-blue-600 font-medium">キャンセル</button>
+            <h2 class="font-bold text-lg">振替先</h2>
+            <div class="w-16"></div>
+        </div>
+        <div class="flex-1 overflow-y-auto bg-gray-50">
+            <div id="transfer-candidates-list" class="divide-y divide-gray-200 bg-white border-b border-gray-200">
+                <!-- Candidates will be injected here -->
+            </div>
+        </div>
     </div>
 
     <script src="/static/script.js?v={{ now }}"></script>

@@ -1,5 +1,14 @@
 from flask import Flask, render_template, jsonify, request
-from moneyforward_api import request_user_asset_acts, request_large_categories, request_transactions_category_bulk_updates, session_from_cookie_file
+from moneyforward_api import (
+    request_user_asset_acts, 
+    request_large_categories, 
+    request_transactions_category_bulk_updates, 
+    request_manual_user_asset_act_partner_sources,
+    request_change_transfer,
+    request_clear_transfer,
+    request_update_user_asset_act,
+    get_csrf_token
+)
 from moneyforward_utils import append_row_form_user_asset_acts
 import os
 from datetime import datetime
@@ -151,6 +160,93 @@ def notify():
         nc.schedule_notification(notification, 1, False)
     except ImportError:
         pass  # No operation for notification in this context
+
+@app.route('/api/act/<id>/partner_sources', methods=['GET'])
+def get_partner_sources(id):
+    try:
+        with session_from_cookies_data(app.config['COOKIES_DATA']) as s:
+            data = request_manual_user_asset_act_partner_sources(s, id)
+            
+            # Stringify IDs to prevent JS precision loss
+            if 'manual_user_asset_act_partner_sources' in data:
+                for source in data['manual_user_asset_act_partner_sources']:
+                    if 'sub_account' in source:
+                        sub = source['sub_account']
+                        if 'id' in sub:
+                            sub['id'] = str(sub['id'])
+                        
+                        if 'partner_candidate_acts' in sub:
+                            for candidate in sub['partner_candidate_acts']:
+                                if 'partner_candidate_act' in candidate:
+                                    act = candidate['partner_candidate_act']
+                                    if 'id' in act:
+                                        act['id'] = str(act['id'])
+                                    if 'amount' in act:
+                                        act['amount'] = str(act['amount'])
+
+            return jsonify(data)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/act/<id>/transfer', methods=['POST'])
+def set_transfer(id):
+    try:
+        data = request.json
+        partner_account_id_hash = data.get('partner_account_id_hash')
+        partner_sub_account_id_hash = data.get('partner_sub_account_id_hash')
+        partner_act_id = data.get('partner_act_id') # Optional
+        with session_from_cookies_data(app.config['COOKIES_DATA']) as s:
+            request_change_transfer(
+                s, 
+                id, 
+                partner_account_id_hash=partner_account_id_hash, 
+                partner_sub_account_id_hash=partner_sub_account_id_hash,
+                partner_act_id=partner_act_id
+            )
+            return jsonify({'status': 'success'})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/act/<id>/transfer', methods=['DELETE'])
+def clear_transfer(id):
+    try:
+        with session_from_cookies_data(app.config['COOKIES_DATA']) as s:
+            request_clear_transfer(s, id)
+            return jsonify({'status': 'success'})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/act/<id>', methods=['PUT'])
+def update_act(id):
+    try:
+        data = request.json
+        large_category_id = data.get('large_category_id')
+        middle_category_id = data.get('middle_category_id')
+        is_target = data.get('is_target')
+        memo = data.get('memo')
+
+        with session_from_cookies_data(app.config['COOKIES_DATA']) as s:
+            token = get_csrf_token(s)
+            request_update_user_asset_act(
+                s, 
+                token, 
+                id, 
+                large_category_id=large_category_id,
+                middle_category_id=middle_category_id,
+                is_target=is_target,
+                memo=memo
+            )
+            return jsonify({'status': 'success'})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
     try:

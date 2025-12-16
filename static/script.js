@@ -53,7 +53,32 @@ document.addEventListener('DOMContentLoaded', () => {
         categoryModalClose: document.getElementById('category-modal-close'),
         categoryModalBack: document.getElementById('category-modal-back'),
         toast: document.getElementById('toast'),
-        toastMessage: document.getElementById('toast-message')
+        toastMessage: document.getElementById('toast-message'),
+        // Detail Modal Elements
+        detailModal: document.getElementById('detail-modal'),
+        detailClose: document.getElementById('detail-close'),
+        detailType: document.getElementById('detail-type'),
+        detailAmount: document.getElementById('detail-amount'),
+        detailCategoryBtn: document.getElementById('detail-category-btn'),
+        detailIconWrapper: document.getElementById('detail-icon-wrapper'),
+        detailIcon: document.getElementById('detail-icon'),
+        detailLargeCategory: document.getElementById('detail-large-category'),
+        detailMiddleCategory: document.getElementById('detail-middle-category'),
+        detailDate: document.getElementById('detail-date'),
+        detailContent: document.getElementById('detail-content'),
+        detailAccount: document.getElementById('detail-account'),
+        detailSubAccount: document.getElementById('detail-sub-account'),
+        detailTransferToggleBtn: document.getElementById('detail-transfer-toggle-btn'),
+        detailTransferInfo: document.getElementById('detail-transfer-info'),
+        detailTransferSource: document.getElementById('detail-transfer-source'),
+        detailTransferDest: document.getElementById('detail-transfer-dest'),
+        detailIsTarget: document.getElementById('detail-is-target'),
+        detailMemo: document.getElementById('detail-memo'),
+        detailSaveBtn: document.getElementById('detail-save-btn'),
+        // Transfer Modal Elements
+        transferModal: document.getElementById('transfer-modal'),
+        transferModalClose: document.getElementById('transfer-modal-close'),
+        transferCandidatesList: document.getElementById('transfer-candidates-list')
     };
 
     // Icon Mapping (Large Category ID -> FontAwesome Class)
@@ -251,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
             row.appendChild(contentWrapper);
             row.appendChild(amountWrapper);
 
-            // Click handler for row (toggle checkbox in edit mode)
+            // Click handler for row (toggle checkbox in edit mode or open detail)
             row.addEventListener('click', (e) => {
                 if (state.isEditing) {
                     // Prevent double toggle if clicking directly on checkbox
@@ -259,6 +284,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         checkbox.checked = !checkbox.checked;
                         toggleSelection(act.id, checkbox.checked);
                     }
+                } else {
+                    // Open Detail Modal
+                    openDetailModal(act);
                 }
             });
 
@@ -525,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Bulk Category Update Logic ---
 
     const openCategoryModal = () => {
-        if (state.selectedIds.size === 0) {
+        if (state.categorySelectionMode !== 'single' && state.selectedIds.size === 0) {
             alert('取引を選択してください');
             return;
         }
@@ -575,7 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span class="text-gray-700">${hist.large_name} / ${hist.middle_name}</span>
             `;
             btn.addEventListener('click', () => {
-                executeBulkUpdate(hist.large_id, hist.middle_id, hist.large_name, hist.middle_name);
+                onCategorySelected(hist.large_id, hist.middle_id, hist.large_name, hist.middle_name);
             });
             els.categoryHistoryList.appendChild(btn);
         });
@@ -618,7 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.className = 'w-full flex items-center p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left';
                 btn.innerHTML = `<span class="text-gray-900">${mid.name}</span>`;
                 btn.addEventListener('click', () => {
-                    executeBulkUpdate(largeCategory.id, mid.id, largeCategory.name, mid.name);
+                    onCategorySelected(largeCategory.id, mid.id, largeCategory.name, mid.name);
                 });
                 els.middleCategoryList.appendChild(btn);
             });
@@ -662,7 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         `;
                         btn.addEventListener('click', () => {
-                            executeBulkUpdate(large.id, mid.id, large.name, mid.name);
+                            onCategorySelected(large.id, mid.id, large.name, mid.name);
                         });
                         els.middleCategoryList.appendChild(btn);
                     }
@@ -675,11 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const executeBulkUpdate = async (largeId, middleId, largeName, middleName) => {
-        if (!confirm(`${state.selectedIds.size}件の取引を「${largeName} / ${middleName}」に変更しますか？`)) {
-            return;
-        }
-
+    const onCategorySelected = async (largeId, middleId, largeName, middleName) => {
         // Update History
         const newHistoryItem = { large_id: largeId, middle_id: middleId, large_name: largeName, middle_name: middleName };
         // Remove existing if same
@@ -689,6 +713,25 @@ document.addEventListener('DOMContentLoaded', () => {
         // Limit to 5
         if (state.categoryHistory.length > 5) state.categoryHistory.pop();
         localStorage.setItem('categoryHistory', JSON.stringify(state.categoryHistory));
+
+        if (state.categorySelectionMode === 'single') {
+            // Single Mode (Detail Modal)
+            pendingCategoryChange = { large_category_id: largeId, middle_category_id: middleId, large_category: largeName, middle_category: middleName };
+            
+            // Update Detail Modal UI
+            els.detailLargeCategory.textContent = largeName;
+            els.detailMiddleCategory.textContent = middleName;
+            els.detailIcon.className = `fas ${getIconClass(largeId)}`;
+            
+            closeCategoryModal();
+            state.categorySelectionMode = 'bulk'; // Reset
+            return;
+        }
+
+        // Bulk Mode
+        if (!confirm(`${state.selectedIds.size}件の取引を「${largeName} / ${middleName}」に変更しますか？`)) {
+            return;
+        }
 
         // API Call
         try {
@@ -752,7 +795,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Event Listeners for Bulk Update
     if (els.btnBulkCategoryChange) {
-        els.btnBulkCategoryChange.addEventListener('click', openCategoryModal);
+        els.btnBulkCategoryChange.addEventListener('click', () => {
+            state.categorySelectionMode = 'bulk';
+            openCategoryModal();
+        });
     }
 
     if (els.categoryModalClose) {
@@ -788,5 +834,277 @@ document.addEventListener('DOMContentLoaded', () => {
             els.categorySearchInput.focus();
         });
     }
+
+    // --- Detail Modal Logic ---
+
+    let currentDetailAct = null;
+    let pendingCategoryChange = null;
+
+    const openDetailModal = (act) => {
+        currentDetailAct = act;
+        pendingCategoryChange = null;
+
+        // Populate Data
+        els.detailAmount.textContent = `¥${Number(act.amount).toLocaleString()}`;
+        els.detailType.textContent = act.is_income ? '収入' : '支出';
+        els.detailType.className = `text-sm mb-1 ${act.is_income ? 'text-blue-500' : 'text-red-500'}`;
+        
+        els.detailLargeCategory.textContent = act.large_category;
+        els.detailMiddleCategory.textContent = act.middle_category;
+        els.detailIcon.className = `fas ${getIconClass(act.large_category_id)}`;
+        
+        // Date formatting
+        const dateObj = new Date(act.updated_at);
+        els.detailDate.textContent = `${dateObj.getFullYear()}/${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+        
+        els.detailContent.textContent = act.content;
+        els.detailAccount.textContent = act['account.service.service_name'];
+        els.detailSubAccount.textContent = act['sub_account.sub_name'];
+        
+        els.detailIsTarget.checked = act.is_target === 1;
+        els.detailMemo.value = act.memo || ''; // Assuming memo is in act object (might need to fetch detail if not in list)
+
+        // Transfer Section
+        updateTransferSection(act);
+
+        els.detailModal.classList.remove('hidden');
+    };
+
+    const closeDetailModal = () => {
+        els.detailModal.classList.add('hidden');
+        currentDetailAct = null;
+    };
+
+    const updateTransferSection = (act) => {
+        const isTransfer = act.is_transfer === 1;
+        
+        if (isTransfer) {
+            els.detailTransferToggleBtn.textContent = '振替解除';
+            els.detailTransferToggleBtn.className = 'text-xs bg-white border border-red-300 px-2 py-1 rounded shadow-sm text-red-600';
+            els.detailTransferToggleBtn.onclick = clearTransfer;
+            
+            els.detailTransferInfo.classList.remove('hidden');
+            // Assuming transfer info is available or we might need to fetch it
+            // For now, just showing placeholders or what we have
+            // Note: The list API might not return partner account names directly unless joined.
+            // If needed, we should fetch detail.
+            els.detailTransferSource.textContent = '詳細取得中...'; 
+            els.detailTransferDest.textContent = '詳細取得中...';
+            
+            // Fetch partner info if needed (optional, for better display)
+             fetch(`/api/act/${act.id}/partner_sources`)
+                .then(res => res.json())
+                .then(data => {
+                    // This API returns candidates, not current status. 
+                    // Current status should be in the act object if available.
+                    // If the list API doesn't provide partner names, we might need another API call or just show "振替"
+                });
+
+        } else {
+            els.detailTransferToggleBtn.textContent = '振替に変更';
+            els.detailTransferToggleBtn.className = 'text-xs bg-white border border-blue-300 px-2 py-1 rounded shadow-sm text-blue-600';
+            els.detailTransferToggleBtn.onclick = openTransferModal;
+            
+            els.detailTransferInfo.classList.add('hidden');
+        }
+    };
+
+    const saveDetail = async () => {
+        if (!currentDetailAct) return;
+
+        const updates = {
+            is_target: els.detailIsTarget.checked ? 1 : 0,
+            memo: els.detailMemo.value
+        };
+
+        if (pendingCategoryChange) {
+            updates.large_category_id = pendingCategoryChange.large_category_id;
+            updates.middle_category_id = pendingCategoryChange.middle_category_id;
+        }
+
+        try {
+            const res = await fetch(`/api/act/${currentDetailAct.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                showToast('保存しました');
+                
+                // Refresh list or update local data
+                // Simple approach: reload list (or update specific row)
+                // Updating row locally:
+                const row = document.querySelector(`div[data-id="${currentDetailAct.id}"]`);
+                if (row) {
+                    if (pendingCategoryChange) {
+                        const icon = row.querySelector('.fa-circle, .fas').parentElement.querySelector('i');
+                        icon.className = `fas ${getIconClass(updates.large_category_id)}`;
+                        const subContent = row.querySelector('.text-xs.text-gray-500');
+                        if (subContent) subContent.textContent = `${pendingCategoryChange.large_category} / ${pendingCategoryChange.middle_category}`;
+                        
+                        // Update currentDetailAct for next open
+                        currentDetailAct.large_category_id = updates.large_category_id;
+                        currentDetailAct.large_category = pendingCategoryChange.large_category;
+                        currentDetailAct.middle_category_id = updates.middle_category_id;
+                        currentDetailAct.middle_category = pendingCategoryChange.middle_category;
+                    }
+                    currentDetailAct.is_target = updates.is_target;
+                    currentDetailAct.memo = updates.memo;
+                }
+                
+                closeDetailModal();
+            } else {
+                alert('保存に失敗しました: ' + data.message);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('通信エラーが発生しました');
+        }
+    };
+
+    // Category Change in Detail Modal
+    if (els.detailCategoryBtn) {
+        els.detailCategoryBtn.addEventListener('click', () => {
+            state.categorySelectionMode = 'single';
+            openCategoryModal();
+        });
+    }
+
+    // --- Transfer Modal Logic ---
+
+    const openTransferModal = async () => {
+        if (!currentDetailAct) return;
+        
+        els.transferModal.classList.remove('hidden');
+        els.transferCandidatesList.innerHTML = '<div class="p-4 text-center text-gray-400">読み込み中...</div>';
+
+        try {
+            const res = await fetch(`/api/act/${currentDetailAct.id}/partner_sources`);
+            const data = await res.json();
+            
+            renderTransferCandidates(data.manual_user_asset_act_partner_sources);
+        } catch (e) {
+            console.error(e);
+            els.transferCandidatesList.innerHTML = '<div class="p-4 text-center text-red-500">読み込み失敗</div>';
+        }
+    };
+
+    const closeTransferModal = () => {
+        els.transferModal.classList.add('hidden');
+    };
+
+    const renderTransferCandidates = (sources) => {
+        els.transferCandidatesList.innerHTML = '';
+        
+        if (!sources || sources.length === 0) {
+            els.transferCandidatesList.innerHTML = '<div class="p-4 text-center text-gray-400">候補なし</div>';
+            return;
+        }
+
+        sources.forEach(source => {
+            const sub = source.sub_account;
+            const candidates = sub.partner_candidate_acts || [];
+            const isRecommended = candidates.length > 0;
+
+            const btn = document.createElement('button');
+            btn.className = 'w-full text-left p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors';
+            
+            let html = `
+                <div class="flex justify-between items-center">
+                    <div>
+                        <div class="font-bold text-gray-800">${sub.account_service_name}</div>
+                        <div class="text-sm text-gray-600">${sub.sub_name} ${sub.sub_type}</div>
+                    </div>
+                    ${isRecommended ? '<span class="bg-orange-100 text-orange-600 text-xs px-2 py-1 rounded-full font-bold">推奨</span>' : ''}
+                </div>
+            `;
+
+            if (isRecommended) {
+                candidates.forEach(cand => {
+                    const cAct = cand.partner_candidate_act;
+                    const dateObj = new Date(cAct.updated_at);
+                    const dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+                    html += `
+                        <div class="mt-2 text-xs text-gray-500 bg-orange-50 p-2 rounded">
+                            <div>候補: ${dateStr} ${cAct.content}</div>
+                            <div class="font-bold">¥${Number(cAct.amount).toLocaleString()}</div>
+                        </div>
+                    `;
+                });
+            }
+
+            btn.innerHTML = html;
+            btn.addEventListener('click', () => {
+                const partnerActId = isRecommended ? candidates[0].partner_candidate_act.id : null;
+                executeTransfer(sub.account_id_hash, sub.sub_account_id_hash, partnerActId);
+            });
+
+            els.transferCandidatesList.appendChild(btn);
+        });
+    };
+
+    const executeTransfer = async (accHash, subHash, actId) => {
+        if (!confirm('振替として設定しますか？')) return;
+
+        try {
+            const res = await fetch(`/api/act/${currentDetailAct.id}/transfer`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    partner_account_id_hash: accHash,
+                    partner_sub_account_id_hash: subHash,
+                    partner_act_id: actId
+                })
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                showToast('振替を設定しました');
+                closeTransferModal();
+                
+                // Update local state
+                currentDetailAct.is_transfer = 1;
+                updateTransferSection(currentDetailAct);
+                
+                // Update list row icon/style if needed (optional)
+            } else {
+                alert('設定に失敗しました: ' + data.message);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('通信エラーが発生しました');
+        }
+    };
+
+    const clearTransfer = async () => {
+        if (!confirm('振替を解除しますか？')) return;
+
+        try {
+            const res = await fetch(`/api/act/${currentDetailAct.id}/transfer`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                showToast('振替を解除しました');
+                
+                // Update local state
+                currentDetailAct.is_transfer = 0;
+                updateTransferSection(currentDetailAct);
+            } else {
+                alert('解除に失敗しました: ' + data.message);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('通信エラーが発生しました');
+        }
+    };
+
+    // Event Listeners for Detail/Transfer Modals
+    if (els.detailClose) els.detailClose.addEventListener('click', closeDetailModal);
+    if (els.detailSaveBtn) els.detailSaveBtn.addEventListener('click', saveDetail);
+    if (els.transferModalClose) els.transferModalClose.addEventListener('click', closeTransferModal);
 
 });
