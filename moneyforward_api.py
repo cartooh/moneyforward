@@ -191,10 +191,21 @@ def get_csrf_token(s):
     """
     res = s.get("https://moneyforward.com/cf")
     soup = BeautifulSoup(res.content, "html.parser")
-    meta = soup.find("meta", {'name': 'csrf-token'})
-    assert meta, "CSRF token meta tag not found"
-    assert 'content' in meta, "CSRF token meta tag has no content attribute"
-    return meta['content']
+    metas = soup.find_all("meta", {'name': 'csrf-token'})
+    
+    for meta in metas:
+        if 'content' in meta.attrs:
+            return meta['content']
+            
+    # Debug info if not found
+    if metas:
+        print(f"Found {len(metas)} csrf-token meta tags, but none had content attribute.")
+        for m in metas:
+            print(f" - {m}")
+    else:
+        print("No csrf-token meta tag found.")
+        
+    raise ValueError("CSRF token not found")
 
 
 def request_update_user_asset_act(s, csrf_token, id_, 
