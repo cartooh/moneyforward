@@ -12,6 +12,9 @@ from contextlib import closing
 from time import sleep
 from random import uniform
 from tqdm import tqdm
+import os
+from openpyxl import load_workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +57,66 @@ def upsert(frame, name: str, unique_index_label, con):
         conn.executemany(insert_statement, data_list)
     
     table.insert(method=_execute_insert)
+
+
+def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
+    from openpyxl import load_workbook
+    from openpyxl.utils.dataframe import dataframe_to_rows
+    
+    if os.path.exists(excel_file):
+        # 既存のファイルを読み込む
+        wb = load_workbook(excel_file)
+        if sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            # 既存データを読み込む
+            existing_data = []
+            for row in ws.iter_rows(values_only=True):
+                existing_data.append(row)
+            if existing_data:
+                existing_df = pd.DataFrame(existing_data[1:], columns=existing_data[0])  # ヘッダー行を除く
+            else:
+                existing_df = pd.DataFrame()
+        else:
+            # シートが存在しない場合
+            ws = wb.create_sheet(sheet_name)
+            existing_df = pd.DataFrame()
+        
+        # id をキーにしてマージ（更新と新規追加）
+        if unique_index_label in existing_df.columns and unique_index_label in df.columns:
+            existing_df = existing_df.set_index(unique_index_label)
+            df = df.set_index(unique_index_label)
+            existing_df.update(df)
+            # 新規データを追加
+            new_rows = df[~df.index.isin(existing_df.index)]
+            existing_df = pd.concat([existing_df, new_rows])
+            existing_df = existing_df.reset_index()
+        else:
+            # ユニークインデックスがない場合、単に結合
+            existing_df = pd.concat([existing_df, df]).drop_duplicates()
+    else:
+        # 新規作成
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = sheet_name
+        existing_df = df
+    
+    # シートをクリア
+    ws.delete_rows(1, ws.max_row)
+    
+    # 新しいデータを書き込む
+    for r, row in enumerate(dataframe_to_rows(existing_df, index=False, header=True), 1):
+        for c, value in enumerate(row, 1):
+            ws.cell(row=r, column=c, value=value)
+    
+    # 保存
+    while True:
+        try:
+            wb.save(excel_file)
+            break
+        except PermissionError:
+            print(f"PermissionError: {excel_file} が開いている可能性があります。Excelファイルを閉じてEnterキーを押してください。")
+            input()
 
 
 def get_account_summaries_list(account_summaries, args):
@@ -189,6 +252,20 @@ def get_term_data(s, args):
             upsert(term_data_list, 'user_asset_act', 'id', con)
         return
     
+    if args.excel:
+        if args.excel_header:
+            select_header = [x.split("=", 2)[0] for x in args.excel_header]
+            for c in set(select_header) - set(term_data_list.columns):
+                term_data_list[c] = None
+            term_data_list = term_data_list[select_header]
+            
+            rename_header = dict(x.split("=", 2) for x in args.excel_header if x.find('=') != -1)
+            if rename_header:
+                term_data_list=term_data_list.rename(columns=rename_header)
+            
+        upsert_to_excel(term_data_list, 'user_asset_act', args.excel, 'id')
+        return
+    
     print(*term_data_list.columns.tolist())
     for index, row in term_data_list.iterrows():
         print(*row.tolist())
@@ -206,6 +283,7 @@ def main(argv=None):
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--csv')
     group.add_argument('--sqlite')
+    group.add_argument('--excel')
     parser.add_argument('--csv_header', nargs='+')
     sqlite_header = """id date year month account_id sub_account_id is_transfer is_income
                        orig_content=content orig_amount=amount currency jpyrate memo 
@@ -240,6 +318,7 @@ def main(argv=None):
                        partner_act.partner_act.partner_sub_account_id_hash=partner_act_partner_sub_account_id_hash
                        """.split()
     parser.add_argument('--sqlite_header', nargs='+', default=sqlite_header)
+    parser.add_argument('--excel_header', nargs='+', default=sqlite_header)  # 同じデフォルトを使用
     parser.add_argument('-i', '--ignore_KeyError', action='store_true')
     
     args = parser.parse_args(argv)
