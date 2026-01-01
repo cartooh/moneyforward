@@ -1,29 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os
-import sys
 import argparse
-import pickle
-import json
-import csv
 import logging
 import datetime
-from pprint import pprint, pformat
-import requests
 import pandas as pd
 import dateutil.parser
 from datetime import timedelta, datetime
-from collections import defaultdict
 import sqlite3
-import sqlalchemy
 from contextlib import closing
-from bs4 import BeautifulSoup
 from time import sleep
 from random import uniform
 from tqdm import tqdm
-from contextlib import contextmanager
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +22,7 @@ logging.basicConfig(level=logging.INFO, format=formatter)
 from moneyforward_api import *
 
 # move shared utilities to separate module
-from moneyforward_utils import traverse, convert_user_asset_act_to_dict, get_categories_form_session
+from moneyforward_utils import traverse, get_categories_form_session
 
 
 def upsert(frame, name: str, unique_index_label, con):
