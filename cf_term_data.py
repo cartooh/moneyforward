@@ -190,37 +190,41 @@ def read_existing_data_from_sheet(ws, unique_index_label, sheet_name):
     headers = []
     header_len = 0
     unique_idx = None
+    existing_df = pd.DataFrame()
+    existing_df['excel_row'] = []
     
-    # ヘッダー行を処理
     header_rows = list(ws.iter_rows(values_only=True, min_row=1, max_row=1))
-    if header_rows:
-        header_row = header_rows[0]
-        for i, h in enumerate(header_row):
-            if h is None:
-                break
-        header_len = i
-        headers = header_row[:header_len]
-        # headersが存在する場合のみunique_index_label の存在確認
-        if headers and unique_index_label not in headers:
-            raise ValueError(f"unique_index_label '{unique_index_label}' column not found in existing sheet '{sheet_name}': {headers}")
-        if headers:
-            unique_idx = headers.index(unique_index_label)
-        
-        # データ行を処理 (2行目から)
-        for row_idx, row in enumerate(ws.iter_rows(values_only=True, min_row=2), 2):
-            if unique_idx is not None:
-                val = row[unique_idx]
-                if pd.isna(val) or val == '':
-                    break  # 無効な値なので、それ以降は読み込まない
-            existing_data.append(row[:header_len])
-            row_numbers.append(row_idx)
+    if not header_rows:
+        return existing_df, headers
+
+    # ヘッダー行を処理
+    header_row = header_rows[0]
+    for i, h in enumerate(header_row):
+        if h is None:
+            break
+    
+    header_len = i
+    headers = header_row[:header_len]
+
+    if not headers:
+        return existing_df, headers
+
+    # headersが存在する場合のみunique_index_label の存在確認
+    if unique_index_label not in headers:
+        raise ValueError(f"unique_index_label '{unique_index_label}' column not found in existing sheet '{sheet_name}': {headers}")
+    unique_idx = headers.index(unique_index_label)
+    
+    # データ行を処理 (2行目から)
+    for row_idx, row in enumerate(ws.iter_rows(values_only=True, min_row=2), 2):
+        val = row[unique_idx]
+        if pd.isna(val) or val == '':
+            break  # 無効な値なので、それ以降は読み込まない
+        existing_data.append(row[:header_len])
+        row_numbers.append(row_idx)
     
     if existing_data:
         existing_df = pd.DataFrame(existing_data, columns=headers)
         existing_df['excel_row'] = row_numbers
-    else:
-        existing_df = pd.DataFrame()
-        existing_df['excel_row'] = []
     
     return existing_df, headers
 
