@@ -278,5 +278,29 @@ class TestUpsertToExcel(unittest.TestCase):
         4  |  D   |  40   |   W
         """
 
+    def test_sheet_not_exist(self):
+        """シート不存在テスト"""
+        # まずSheet1を作成
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        # 次に存在しないSheet2でupsert
+        new_sheet = 'Sheet2'
+        upsert_to_excel(self.df, new_sheet, self.excel_file, self.unique_index)
+        # Sheet2が存在することを確認
+        wb = load_workbook(self.excel_file)
+        self.assertIn(new_sheet, wb.sheetnames)
+        # Sheet2のデータを確認
+        ws = wb[new_sheet]
+        headers = [cell.value for cell in ws[1]]
+        data = [[cell.value for cell in row] for row in ws.iter_rows(min_row=2)]
+        self.assertEqual(headers, list(self.df.columns))
+        self.assertEqual(data, self.df.values.tolist())
+        """想定されるHeadersとDataの内容を確認
+        id | name | value
+        -------------------
+        1  |  A   |  10
+        2  |  B   |  20
+        3  |  C   |  30
+        """
+
 if __name__ == '__main__':
     unittest.main()
