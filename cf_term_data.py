@@ -216,11 +216,16 @@ def read_existing_data(ws):
     existing_data = []
     row_numbers = []
     headers = []
+    header_len = 0
     for row_idx, row in enumerate(ws.iter_rows(values_only=True), 1):
         if row_idx == 1:
-            headers = list(row)
+            for i, h in enumerate(row):
+                if h is None:
+                    break
+            header_len = i
+            headers = row[:header_len]
         else:
-            existing_data.append(row)
+            existing_data.append(row[:header_len])
             row_numbers.append(row_idx)
     
     if existing_data:
