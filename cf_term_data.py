@@ -116,7 +116,7 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
     動作:
         - 新規ファイル/シート: dfを書き込み作成。
         - 既存シートでスキーマ一致: 差分更新・追加。
-        - スキーマ不一致（列・行）: シート全体を再書き込み。
+        - スキーマ不一致（列・行）: 差分更新（新規列追加、既存列維持）。
         - 空df: エラー。
         - 既存シートにunique_index_label列がない: エラー。
     """
@@ -165,137 +165,69 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
         existing_df['excel_row'] = []
         headers = []
     
-    # ヘッダーが同じかどうか確認し、新しい列に対応
-    new_columns = [col for col in df.columns if col not in headers]
-    missing_columns = [col for col in headers if col not in df.columns]
-    # 行の変更をチェック
-    if unique_index_label and unique_index_label in existing_df.columns and unique_index_label in df.columns:
-        existing_ids = set(existing_df[unique_index_label])
-        new_ids = set(df[unique_index_label])
-        missing_rows = existing_ids - new_ids
-        new_rows = new_ids - existing_ids
-        existing_df_indexed = existing_df.set_index(unique_index_label)
-        df_indexed = df.set_index(unique_index_label)
-        common_indices = existing_df_indexed.index.intersection(df_indexed.index)
-        # 変更された行を特定
-        # common_indicesがpandas.Index型かset型かで空判定を分岐
-        is_empty = False
-        if hasattr(common_indices, 'empty'):
-            is_empty = common_indices.empty
-        else:
-            is_empty = len(common_indices) == 0
-        if not is_empty:
-            common_cols = existing_df_indexed.columns.intersection(df_indexed.columns).drop('excel_row', errors='ignore')
-            existing_for_cmp = existing_df_indexed[common_cols]
-            df_for_cmp = df_indexed[common_cols]
-            changed_mask = (existing_for_cmp.loc[common_indices] != df_for_cmp.loc[common_indices]).any(axis=1)
-            changed_indices = common_indices[changed_mask]
-        else:
-            changed_indices = common_indices
-    else:
-        missing_rows = set()
-        new_rows = set()
-        if unique_index_label and unique_index_label in df.columns:
-            new_rows = set(df[unique_index_label])
-        common_indices = set()
-        changed_indices = set()
-        existing_df_indexed = None
-        df_indexed = None
+    # 1. 列の同期
+    # dfにある列がheadersになければ追加
+    current_headers = list(headers)
+    col_map = {name: i+1 for i, name in enumerate(current_headers)}
     
-    if new_columns or missing_columns or missing_rows or new_rows:
-        # スキーマ不一致時、差分で対応（既存データを維持）
-        # 新規列を既存列の後に追加
-        existing_col_count = len(headers)
-        col_map = {col: i+1 for i, col in enumerate(headers)}
-        for col in df.columns:
-            if col not in headers:
-                existing_col_count += 1
-                ws.insert_cols(existing_col_count)
-                ws.cell(row=1, column=existing_col_count, value=col)
-                col_map[col] = existing_col_count
-        
-        # 欠損列は削除せず残す
-        # 欠損行は削除せず残す
-        
-        # 新規行を追加
-        if new_rows:
-            start_row = ws.max_row + 1
-            for idx in new_rows:
-                row_data = df[df[unique_index_label] == idx].iloc[0]
-                for col_name, value in row_data.items():
-                    if col_name in col_map:
-                        ws.cell(row=start_row, column=col_map[col_name], value=value)
-                start_row += 1
-        
-        # 変更行を更新
-        is_empty = False
-        if hasattr(common_indices, 'empty'):
-            is_empty = common_indices.empty
-        else:
-            is_empty = len(common_indices) == 0
-        if not is_empty:
-            for idx in common_indices:
-                if idx in changed_indices:
-                    row_num = existing_df_indexed.loc[idx, 'excel_row']
-                    row_data = df[df[unique_index_label] == idx].iloc[0]
-                    for col_name, value in row_data.items():
-                        if col_name in col_map:
-                            ws.cell(row=row_num, column=col_map[col_name], value=value)
+    for col in df.columns:
+        if col not in col_map:
+            # 新規列追加
+            new_col_idx = len(current_headers) + 1
+            ws.cell(row=1, column=new_col_idx, value=col)
+            col_map[col] = new_col_idx
+            current_headers.append(col)
+
+    # 2. 行の同期
+    # unique_index_label はチェック済み
+    df_indexed = df.set_index(unique_index_label)
+
+    if not existing_df.empty and unique_index_label in existing_df.columns:
+        existing_df_indexed = existing_df.set_index(unique_index_label)
+        existing_ids = set(existing_df_indexed.index)
     else:
-        # 列が一致する場合、差分更新
-        # ユニークインデックスがある場合
-        if unique_index_label in existing_df.columns and unique_index_label in df.columns:
-            # インデックスを設定
-            existing_df_indexed = existing_df.set_index(unique_index_label)
-            df_indexed = df.set_index(unique_index_label)
+        existing_df_indexed = pd.DataFrame()
+        existing_ids = set()
+
+    new_ids = set(df_indexed.index)
+    
+    # 2-1. 新規行の追加
+    rows_to_add = new_ids - existing_ids
+    if rows_to_add:
+        start_row = ws.max_row + 1
+        for idx in rows_to_add:
+            row_data = df_indexed.loc[idx]
+            # unique_index_label の値も書き込む
+            if unique_index_label in col_map:
+                 ws.cell(row=start_row, column=col_map[unique_index_label], value=idx)
             
-            # 共通のインデックス
-            common_indices = existing_df_indexed.index.intersection(df_indexed.index)
+            for col, val in row_data.items():
+                if col in col_map:
+                    ws.cell(row=start_row, column=col_map[col], value=val)
+            start_row += 1
+
+    # 2-2. 既存行の更新
+    common_ids = new_ids & existing_ids
+    if common_ids:
+        for idx in common_ids:
+            excel_row_idx = existing_df_indexed.loc[idx, 'excel_row']
+            if isinstance(excel_row_idx, pd.Series):
+                excel_row_idx = excel_row_idx.iloc[0]
             
-            # 変更された行を特定（共通インデックスで値が異なる行）
-            if not common_indices.empty:
-                # 共通の列で比較
-                common_cols = existing_df_indexed.columns.intersection(df_indexed.columns).drop('excel_row', errors='ignore')
-                existing_for_cmp = existing_df_indexed[common_cols]
-                df_for_cmp = df_indexed[common_cols]
-                changed_mask = (existing_for_cmp.loc[common_indices] != df_for_cmp.loc[common_indices]).any(axis=1)
-                changed_indices = common_indices[changed_mask]
-                
-                # 変更された行のExcel行番号を取得
-                changed_rows = existing_df_indexed.loc[changed_indices, 'excel_row']
-                
-                # 変更されたセルを更新
-                for idx in changed_indices:
-                    row_num = changed_rows.loc[idx]
-                    row_data = pd.Series([idx] + list(df_indexed.loc[idx]), index=[unique_index_label] + list(df_indexed.columns))
-                    for col_idx, value in enumerate(row_data, 1):
-                        ws.cell(row=row_num, column=col_idx, value=value)
-            
-            # 新規行を追加
-            new_indices = df_indexed.index.difference(existing_df_indexed.index)
-            is_empty = False
-            if hasattr(common_indices, 'empty'):
-                is_empty = common_indices.empty
-            else:
-                is_empty = len(common_indices) == 0
-            if not is_empty:
-                # 共通の列で比較
-                common_cols = existing_df_indexed.columns.intersection(df_indexed.columns).drop('excel_row', errors='ignore')
-                existing_for_cmp = existing_df_indexed[common_cols]
-                df_for_cmp = df_indexed[common_cols]
-                changed_mask = (existing_for_cmp.loc[common_indices] != df_for_cmp.loc[common_indices]).any(axis=1)
-                changed_indices = common_indices[changed_mask]
-            
-                # 変更された行のExcel行番号を取得
-                changed_rows = existing_df_indexed.loc[changed_indices, 'excel_row']
-            
-                # 変更されたセルを更新
-                for idx in changed_indices:
-                    row_num = changed_rows.loc[idx]
-                    row_data = pd.Series([idx] + list(df_indexed.loc[idx]), index=[unique_index_label] + list(df_indexed.columns))
-                    for col_idx, value in enumerate(row_data, 1):
-                        ws.cell(row=row_num, column=col_idx, value=value)
-                        ws.cell(row=r, column=c, value=value)
+            row_data = df_indexed.loc[idx]
+            for col, val in row_data.items():
+                if col in col_map:
+                    should_write = True
+                    if col in existing_df_indexed.columns:
+                        existing_val = existing_df_indexed.loc[idx, col]
+                        # pandas の比較は NaN の扱いに注意
+                        if pd.isna(val) and pd.isna(existing_val):
+                            should_write = False
+                        elif val == existing_val:
+                            should_write = False
+                    
+                    if should_write:
+                        ws.cell(row=excel_row_idx, column=col_map[col], value=val)
     
     # 保存
     while True:
