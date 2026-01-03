@@ -277,5 +277,21 @@ class TestUpsertToExcel(unittest.TestCase):
         # 新規行にもカスタム列がある（空）
         self.assertIsNone(ws.cell(row=5, column=custom_col_idx).value)
 
+    def test_upsert_on_header_only_file(self):
+        """ヘッダーだけ定義されたファイルに対するupsertテスト"""
+        # ヘッダーだけのファイルを作成
+        wb = Workbook()
+        ws = wb.active
+        ws.title = self.sheet_name
+        for col_num, header in enumerate(self.df.columns, 1):
+            ws.cell(row=1, column=col_num, value=header)
+        wb.save(self.excel_file)
+        # upsert_to_excel を実行
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        # 結果を確認
+        headers, data = self._read_excel()
+        self.assertEqual(headers, list(self.df.columns))
+        self.assertEqual(data, self.df.values.tolist())
+
 if __name__ == '__main__':
     unittest.main()
