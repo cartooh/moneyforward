@@ -92,39 +92,25 @@ def parse_header(header_list):
     return select_header, rename_header, dtypes_dict
 
 
-def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
+def load_excel_sheet(excel_file, sheet_name, unique_index_label):
     """
-    ユニークインデックスを用いて差分更新を行い、DataFrameをExcelシートにアップサートします。
-
-
-    この関数はExcelファイルに対してアップサート操作を行います。
-    ファイルやシートが存在しない場合は新規作成します。
-    既存データがある場合は、unique_index_label列を使って一致する行に差分を反映し、
-    新規データ（列・行）は既存の書式やカスタム列・行を維持したまま末尾に追加します。
-    既存データにしかない列や行はそのまま残ります。
-
-    引数:
-        df (pd.DataFrame): アップサートするDataFrame。空であってはなりません。
-        sheet_name (str): Excelシート名。
-        excel_file (str): Excelファイルのパス。
-        unique_index_label (str): 更新時に使うユニークインデックスとなる列名。dfおよび既存シート（存在する場合）に必須。
-
-    例外:
-        ValueError: dfが空、unique_index_labelが空、または既存シートにunique_index_label列がない場合。
-        PermissionError: ファイルがロックされている場合（ユーザー入力によるリトライ処理あり）。
-
-    動作:
-        - 新規ファイル/シート: dfを書き込み作成。
-        - 既存シートでスキーマ一致: 差分更新・追加。
-        - スキーマ不一致（列・行）: 差分更新（新規列追加、既存列維持）。
-        - 空df: エラー。
-        - 既存シートにunique_index_label列がない: エラー。
-    """
-    if df.empty:
-        raise ValueError("DataFrame must not be empty")
-    if not unique_index_label:
-        raise ValueError("unique_index_label must be provided and not empty")
+    Excelファイルとシートを読み込み、既存データを準備する。
     
+    引数:
+        excel_file (str): Excelファイルのパス。
+        sheet_name (str): シート名。
+        unique_index_label (str): ユニークインデックス列名。
+    
+    戻り値:
+        tuple: (wb, ws, existing_df, headers)
+            wb: openpyxl.Workbook オブジェクト。
+            ws: ワークシートオブジェクト。
+            existing_df: 既存データのDataFrame（'excel_row'列を含む）。
+            headers: ヘッダーのリスト。
+    
+    例外:
+        ValueError: 既存シートにunique_index_label列がない場合。
+    """
     if os.path.exists(excel_file):
         # 既存のファイルを読み込む
         wb = load_workbook(excel_file)
@@ -164,6 +150,44 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
         existing_df = pd.DataFrame()
         existing_df['excel_row'] = []
         headers = []
+    
+    return wb, ws, existing_df, headers
+
+
+def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
+    """
+    ユニークインデックスを用いて差分更新を行い、DataFrameをExcelシートにアップサートします。
+
+
+    この関数はExcelファイルに対してアップサート操作を行います。
+    ファイルやシートが存在しない場合は新規作成します。
+    既存データがある場合は、unique_index_label列を使って一致する行に差分を反映し、
+    新規データ（列・行）は既存の書式やカスタム列・行を維持したまま末尾に追加します。
+    既存データにしかない列や行はそのまま残ります。
+
+    引数:
+        df (pd.DataFrame): アップサートするDataFrame。空であってはなりません。
+        sheet_name (str): Excelシート名。
+        excel_file (str): Excelファイルのパス。
+        unique_index_label (str): 更新時に使うユニークインデックスとなる列名。dfおよび既存シート（存在する場合）に必須。
+
+    例外:
+        ValueError: dfが空、unique_index_labelが空、または既存シートにunique_index_label列がない場合。
+        PermissionError: ファイルがロックされている場合（ユーザー入力によるリトライ処理あり）。
+
+    動作:
+        - 新規ファイル/シート: dfを書き込み作成。
+        - 既存シートでスキーマ一致: 差分更新・追加。
+        - スキーマ不一致（列・行）: 差分更新（新規列追加、既存列維持）。
+        - 空df: エラー。
+        - 既存シートにunique_index_label列がない: エラー。
+    """
+    if df.empty:
+        raise ValueError("DataFrame must not be empty")
+    if not unique_index_label:
+        raise ValueError("unique_index_label must be provided and not empty")
+    
+    wb, ws, existing_df, headers = load_excel_sheet(excel_file, sheet_name, unique_index_label)
     
     # 1. 列の同期
     # dfにある列がheadersになければ追加
