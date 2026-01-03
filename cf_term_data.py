@@ -13,8 +13,11 @@ from time import sleep
 from random import uniform
 from tqdm import tqdm
 import os
+import warnings
 from openpyxl import load_workbook, Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl.utils import get_column_letter, range_boundaries
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +29,112 @@ from moneyforward_api import *
 
 # move shared utilities to separate module
 from moneyforward_utils import traverse, get_categories_form_session
+
+
+def is_range_overlapping(range1, range2):
+    """
+    Check if two ranges overlap.
+    range1 and range2 are tuples (min_col, min_row, max_col, max_row)
+    """
+    min_col1, min_row1, max_col1, max_row1 = range1
+    min_col2, min_row2, max_col2, max_row2 = range2
+    return not (max_col1 < min_col2 or max_col2 < min_col1 or max_row1 < min_row2 or max_row2 < min_row1)
+
+
+def save_workbook(wb, excel_file):
+    """
+    Save the workbook with retry on PermissionError.
+    
+    Args:
+        wb: openpyxl.Workbook
+        excel_file: str
+    """
+    while True:
+        try:
+            wb.save(excel_file)
+            break
+        except PermissionError:
+            print(f"PermissionError: {excel_file} が開いている可能性があります。Excelファイルを閉じてEnterキーを押してください。")
+            input()
+
+
+def manage_table(ws, table_name, new_max_col, new_max_row):
+    """
+    Manage Excel table: create or update based on table_name.
+    
+    Args:
+        ws: openpyxl.Worksheet
+        table_name: str
+        new_max_col: int
+        new_max_row: int
+    """
+    if ws.tables:
+        # 引数のテーブル名が存在するか確認
+        if table_name in ws.tables:
+            table = ws.tables[table_name]
+            min_col, min_row, max_col, max_row = range_boundaries(table.ref)
+            new_range = (min_col, min_row, new_max_col, new_max_row)
+            # 重複チェック
+            for other_name, other_table in ws.tables.items():
+                if other_name != table_name:
+                    other_range = range_boundaries(other_table.ref)
+                    if is_range_overlapping(new_range, other_range):
+                        warnings.warn(f"Range overlap detected with table '{other_name}', skipping table update for '{table_name}'.")
+                        return
+            if min_col == 1 and min_row == 1:
+                # A1を含む：範囲を広げる
+                new_ref = f"{get_column_letter(min_col)}{min_row}:{get_column_letter(new_max_col)}{new_max_row}"
+                table.ref = new_ref
+            else:
+                # A1を含まない：範囲を広げる、警告
+                warnings.warn(f"Table '{table_name}' does not include A1, but expanding its range.")
+                new_ref = f"{get_column_letter(min_col)}{min_row}:{get_column_letter(new_max_col)}{new_max_row}"
+                table.ref = new_ref
+        else:
+            # 引数のテーブル名が存在しない：A1を含むテーブルを探す
+            a1_table = None
+            for t in ws.tables.values():
+                min_col, min_row, max_col, max_row = range_boundaries(t.ref)
+                if min_col == 1 and min_row == 1:
+                    a1_table = t
+                    break
+            if a1_table:
+                # A1を含むテーブルがある：そのテーブルを広げる、警告
+                warnings.warn(f"Table '{table_name}' not found, using A1-containing table '{a1_table.displayName}' and expanding its range.")
+                min_col, min_row, max_col, max_row = range_boundaries(a1_table.ref)
+                new_range = (min_col, min_row, new_max_col, new_max_row)
+                # 重複チェック
+                for other_name, other_table in ws.tables.items():
+                    if other_table != a1_table:
+                        other_range = range_boundaries(other_table.ref)
+                        if is_range_overlapping(new_range, other_range):
+                            warnings.warn(f"Range overlap detected with table '{other_name}', skipping table update for '{a1_table.displayName}'.")
+                            return
+                new_ref = f"{get_column_letter(min_col)}{min_row}:{get_column_letter(new_max_col)}{new_max_row}"
+                a1_table.ref = new_ref
+            else:
+                # A1を含むテーブルがない：新規作成
+                warnings.warn(f"Table '{table_name}' not found and no A1-containing table, creating new table '{table_name}'.")
+                table_ref = f"A1:{get_column_letter(new_max_col)}{new_max_row}"
+                new_range = (1, 1, new_max_col, new_max_row)
+                # 重複チェック
+                for other_name, other_table in ws.tables.items():
+                    other_range = range_boundaries(other_table.ref)
+                    if is_range_overlapping(new_range, other_range):
+                        warnings.warn(f"Range overlap detected with table '{other_name}', skipping table creation for '{table_name}'.")
+                        return
+                table = Table(displayName=table_name, ref=table_ref)
+                style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+                table.tableStyleInfo = style
+                ws.add_table(table)
+    else:
+        # テーブルが存在しない：新規作成
+        if new_max_row > 1:  # データがある場合のみ
+            table_ref = f"A1:{get_column_letter(new_max_col)}{new_max_row}"
+            table = Table(displayName=table_name, ref=table_ref)
+            style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+            table.tableStyleInfo = style
+            ws.add_table(table)
 
 
 def upsert(frame, name: str, unique_index_label, con):
@@ -164,7 +273,7 @@ def load_excel_sheet(excel_file, sheet_name, unique_index_label):
     return wb, ws, existing_df, headers
 
 
-def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
+def upsert_to_excel(df, sheet_name, excel_file, unique_index_label, table_name="DataTable"):
     """
     ユニークインデックスを用いて差分更新を行い、DataFrameをExcelシートにアップサートします。
 
@@ -180,6 +289,7 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
         sheet_name (str): Excelシート名。
         excel_file (str): Excelファイルのパス。
         unique_index_label (str): 更新時に使うユニークインデックスとなる列名。dfおよび既存シート（存在する場合）に必須。
+        table_name (str): テーブル名。デフォルトは"DataTable"。
 
     例外:
         ValueError: dfが空、unique_index_labelが空、または既存シートにunique_index_label列がない場合。
@@ -263,14 +373,14 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
                     if should_write:
                         ws.cell(row=excel_row_idx, column=col_map[col], value=val)
     
+    # テーブル処理前に保存
+    save_workbook(wb, excel_file)
+    
+    # テーブル処理
+    manage_table(ws, table_name, len(current_headers), ws.max_row)
+    
     # 保存
-    while True:
-        try:
-            wb.save(excel_file)
-            break
-        except PermissionError:
-            print(f"PermissionError: {excel_file} が開いている可能性があります。Excelファイルを閉じてEnterキーを押してください。")
-            input()
+    save_workbook(wb, excel_file)
 
 
 def get_account_summaries_list(account_summaries, args):

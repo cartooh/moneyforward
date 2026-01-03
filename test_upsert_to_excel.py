@@ -239,7 +239,7 @@ class TestUpsertToExcel(unittest.TestCase):
         upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
         # 次に存在しないSheet2でupsert
         new_sheet = 'Sheet2'
-        upsert_to_excel(self.df, new_sheet, self.excel_file, self.unique_index)
+        upsert_to_excel(self.df, new_sheet, self.excel_file, self.unique_index, table_name='Table2')
         # Sheet2が存在することを確認
         wb = load_workbook(self.excel_file)
         self.assertIn(new_sheet, wb.sheetnames)
