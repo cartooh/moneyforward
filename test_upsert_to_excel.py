@@ -38,6 +38,13 @@ class TestUpsertToExcel(unittest.TestCase):
         headers, data = self._read_excel()
         self.assertEqual(headers, list(self.df.columns))
         self.assertEqual(data, self.df.values.tolist())
+        """想定されるHeadersとDataの内容を確認
+        id | name | value
+        -------------------
+        1  |  A   |  10
+        2  |  B   |  20
+        3  |  C   |  30
+        """
 
     def test_no_change_on_same_data(self):
         """再取得一致テスト"""
@@ -47,6 +54,13 @@ class TestUpsertToExcel(unittest.TestCase):
         headers2, data2 = self._read_excel()
         self.assertEqual(headers1, headers2)
         self.assertEqual(data1, data2)
+        """想定されるHeadersとDataの内容を確認
+        id | name | value
+        -------------------
+        1  |  A   |  10
+        2  |  B   |  20
+        3  |  C   |  30
+        """
 
     def test_update_changed_row(self):
         """変更行更新テスト"""
@@ -60,6 +74,13 @@ class TestUpsertToExcel(unittest.TestCase):
         upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
         headers, data = self._read_excel()
         self.assertEqual(data[1][2], 20)  # 元に戻っている
+        """想定されるHeadersとDataの内容を確認
+        id | name | value
+        -------------------
+        1  |  A   |  10
+        2  |  B   |  20
+        3  |  C   |  30
+        """
 
     def test_add_new_row(self):
         """新規行追加テスト"""
@@ -70,6 +91,14 @@ class TestUpsertToExcel(unittest.TestCase):
         headers, data = self._read_excel()
         self.assertEqual(len(data), 4)
         self.assertEqual(data[-1], [4, 'D', 40])
+        """想定されるHeadersとDataの内容を確認
+        id | name | value
+        -------------------
+        1  |  A   |  10
+        2  |  B   |  20
+        3  |  C   |  30
+        4  |  D   |  40
+        """
 
     def test_add_new_column(self):
         """新規列追加テスト"""
@@ -80,6 +109,15 @@ class TestUpsertToExcel(unittest.TestCase):
         headers, data = self._read_excel()
         self.assertIn('new_col', headers)
         self.assertEqual(data[0][3], 'X')
+        self.assertEqual(data[1][3], 'Y')
+        self.assertEqual(data[2][3], 'Z')
+        """想定されるHeadersとDataの内容を確認
+        id | name | value | new_col
+        ----------------------------
+        1  |  A   |  10   |   X
+        2  |  B   |  20   |   Y
+        3  |  C   |  30   |   Z
+        """
 
     def test_remove_row(self):
         """行削除対応テスト"""
@@ -89,33 +127,156 @@ class TestUpsertToExcel(unittest.TestCase):
         ws = wb[self.sheet_name]
         ws.delete_rows(3)  # ヘッダー+1行目なので、3行目削除でid=2の行
         wb.save(self.excel_file)
-        # 再実行
+        # 再実行 (missing_rowsがあるので再書き込み)
         upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
         headers, data = self._read_excel()
         self.assertEqual(len(data), 3)
-        self.assertEqual(data, self.df.values.tolist())
+        self.assertEqual(data[0], [1, 'A', 10])
+        self.assertEqual(data[1], [3, 'C', 30])
+        self.assertEqual(data[2], [2, 'B', 20])
+        """想定されるHeadersとDataの内容を確認
+        id | name | value
+        -------------------
+        1  |  A   |  10
+        3  |  C   |  30
+        2  |  B   |  20
+        """
 
-    def test_no_unique_index(self):
-        """ユニークインデックスなしテスト"""
+    def test_missing_unique_column(self):
+        """ユニークインデックス列欠損テスト"""
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        # Excelからid列を削除
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        ws.delete_cols(1)  # id列（1列目）を削除
+        wb.save(self.excel_file)
+        # 再度実行 (unique_indexは指定されているが列がないので追加)
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        headers, data = self._read_excel()
+        print(headers)
+        print(data)
+        self.assertEqual(headers, ['name', 'value', 'id'])
+        self.assertEqual(data, [
+            ['A', 10, None],
+            ['B', 20, None],
+            ['C', 30, None],
+            ['A', 10, 1],
+            ['B', 20, 2],
+            ['C', 30, 3],
+        ])
+        # 想定: 既存の行（idなし）と新しい行（idあり）が混在
+        """想定されるHeadersとDataの内容を確認
+         name | value | id
+        -------------------
+          A   |  10   |  
+          B   |  20   |  
+          C   |  30   |  
+          A   |  10   |  1
+          B   |  20   |  2
+          C   |  30   |  3
+        """
+
+    def test_no_unique_index_argument(self):
+        """ユニークインデックス引数なしテスト。"""
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, None)
+        # 同じデータを再度追加
         upsert_to_excel(self.df, self.sheet_name, self.excel_file, None)
         headers, data = self._read_excel()
-        self.assertEqual(data, self.df.values.tolist())
+        self.assertEqual(len(data), 6)
+        self.assertEqual(data, self.df.values.tolist() * 2)
+        """想定されるHeadersとDataの内容を確認
+        id | name | value
+        -------------------
+        1  |  A   |  10
+        2  |  B   |  20
+        3  |  C   |  30
+        1  |  A   |  10
+        2  |  B   |  20
+        3  |  C   |  30
+        """
 
-    def test_empty_dataframe(self):
+    def test_empty_dataframe_input(self):
         """空DataFrameテスト"""
         empty_df = pd.DataFrame()
         upsert_to_excel(empty_df, self.sheet_name, self.excel_file, self.unique_index)
         # ファイルが存在するか確認
         self.assertTrue(os.path.exists(self.excel_file))
+        """想定されるHeadersとDataの内容を確認
+        (空のDataFrameのため、HeadersとDataはなし)
+        """
 
-    def test_missing_column(self):
-        """欠損列テスト"""
+    def test_empty_dataframe(self):
         upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
         new_df = self.df[['id', 'name']]  # value列削除
         upsert_to_excel(new_df, self.sheet_name, self.excel_file, self.unique_index)
         headers, data = self._read_excel()
         self.assertEqual(headers, ['id', 'name'])
         self.assertEqual(data, new_df.values.tolist())
+        """想定されるHeadersとDataの内容を確認
+        id | name
+        ---------
+        1  |  A
+        2  |  B
+        3  |  C
+        """
+
+    def test_remove_column(self):
+        """列削除対応テスト"""
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        # Excelから列削除 (value列を削除)
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        ws.delete_cols(3)  # value列（3列目）を削除
+        wb.save(self.excel_file)
+        # 再実行 (missing_columnsがあるので再書き込み)
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        headers, data = self._read_excel()
+        self.assertEqual(len(headers), 3)
+        self.assertEqual(headers, list(self.df.columns))
+        self.assertEqual(data, self.df.values.tolist())
+        """想定されるHeadersとDataの内容を確認
+        id | name | value
+        -------------------
+        1  |  A   |  10
+        2  |  B   |  20
+        3  |  C   |  30
+        """
+
+    def test_column_order_change(self):
+        """列順序変更テスト"""
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        new_df = self.df[['name', 'value', 'id']]  # 列順序変更
+        upsert_to_excel(new_df, self.sheet_name, self.excel_file, self.unique_index)
+        headers, data = self._read_excel()
+        self.assertEqual(headers, ['name', 'value', 'id'])
+        self.assertEqual(data, new_df.values.tolist())
+        """想定されるHeadersとDataの内容を確認
+        name | value | id
+        -------------------
+         A   |  10   |  1
+         B   |  20   |  2
+         C   |  30   |  3
+        """
+
+    def test_combination(self):
+        """組み合わせテスト (新規行 + 新規列)"""
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        new_df = self.df.copy()
+        new_df['new_col'] = ['X', 'Y', 'Z']
+        new_df = pd.concat([new_df, pd.DataFrame({'id': [4], 'name': ['D'], 'value': [40], 'new_col': ['W']})], ignore_index=True)
+        upsert_to_excel(new_df, self.sheet_name, self.excel_file, self.unique_index)
+        headers, data = self._read_excel()
+        self.assertEqual(len(headers), 4)
+        self.assertEqual(len(data), 4)
+        self.assertEqual(data[-1], ['D', 40, 4, 'W'])
+        """想定されるHeadersとDataの内容を確認
+        id | name | value | new_col
+        ----------------------------
+        1  |  A   |  10   |   X
+        2  |  B   |  20   |   Y
+        3  |  C   |  30   |   Z
+        4  |  D   |  40   |   W
+        """
 
 if __name__ == '__main__':
     unittest.main()
