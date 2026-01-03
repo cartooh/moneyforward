@@ -176,34 +176,12 @@ class TestUpsertToExcel(unittest.TestCase):
           C   |  30   |  3
         """
 
-    def test_no_unique_index_argument(self):
-        """ユニークインデックス引数なしテスト。"""
-        upsert_to_excel(self.df, self.sheet_name, self.excel_file, None)
-        # 同じデータを再度追加
-        upsert_to_excel(self.df, self.sheet_name, self.excel_file, None)
-        headers, data = self._read_excel()
-        self.assertEqual(len(data), 6)
-        self.assertEqual(data, self.df.values.tolist() * 2)
-        """想定されるHeadersとDataの内容を確認
-        id | name | value
-        -------------------
-        1  |  A   |  10
-        2  |  B   |  20
-        3  |  C   |  30
-        1  |  A   |  10
-        2  |  B   |  20
-        3  |  C   |  30
-        """
-
-    def test_empty_dataframe_input(self):
-        """空DataFrameテスト"""
+    def test_empty_dataframe_error(self):
+        """空DataFrameエラーテスト"""
         empty_df = pd.DataFrame()
-        upsert_to_excel(empty_df, self.sheet_name, self.excel_file, self.unique_index)
-        # ファイルが存在するか確認
-        self.assertTrue(os.path.exists(self.excel_file))
-        """想定されるHeadersとDataの内容を確認
-        (空のDataFrameのため、HeadersとDataはなし)
-        """
+        with self.assertRaises(ValueError) as cm:
+            upsert_to_excel(empty_df, self.sheet_name, self.excel_file, self.unique_index)
+        self.assertIn("DataFrame must not be empty", str(cm.exception))
 
     def test_empty_dataframe(self):
         upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
@@ -220,19 +198,46 @@ class TestUpsertToExcel(unittest.TestCase):
         3  |  C
         """
 
+    def test_missing_unique_column_error(self):
+        """ユニークインデックス列欠損エラーテスト"""
+        # まず異なるヘッダーでシートを作成
+        different_df = pd.DataFrame({'other_id': [1, 2, 3], 'data': ['X', 'Y', 'Z']})
+        upsert_to_excel(different_df, self.sheet_name, self.excel_file, 'other_id')
+        # unique_index_label が存在しない列でupsert
+        with self.assertRaises(ValueError) as cm:
+            upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        self.assertIn(f"unique_index_label '{self.unique_index}' column not found", str(cm.exception))
+
     def test_remove_column(self):
-        """列削除対応テスト"""
+        """列削除対応テスト（欠損列が残る）"""
         upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
         # Excelから列削除 (value列を削除)
         wb = load_workbook(self.excel_file)
         ws = wb[self.sheet_name]
         ws.delete_cols(3)  # value列（3列目）を削除
         wb.save(self.excel_file)
-        # 再実行 (missing_columnsがあるので再書き込み)
+        # 再実行 (missing_columnsがあるので、欠損列は残す)
         upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
         headers, data = self._read_excel()
-        self.assertEqual(len(headers), 3)
-        self.assertEqual(headers, list(self.df.columns))
+        # 欠損列は残らず、既存順序維持
+        self.assertEqual(headers, ['id', 'name'])
+        self.assertEqual(data, [[1, 'A'], [2, 'B'], [3, 'C']])
+        """想定されるHeadersとDataの内容を確認
+        id | name
+        ---------
+        1  |  A
+        2  |  B
+        3  |  C
+        """
+
+    def test_column_order_change(self):
+        """列順序変更テスト（既存順序維持）"""
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        new_df = self.df[['name', 'value', 'id']]  # 列順序変更
+        upsert_to_excel(new_df, self.sheet_name, self.excel_file, self.unique_index)
+        headers, data = self._read_excel()
+        # 既存順序が維持される
+        self.assertEqual(headers, ['id', 'name', 'value'])
         self.assertEqual(data, self.df.values.tolist())
         """想定されるHeadersとDataの内容を確認
         id | name | value
@@ -240,22 +245,6 @@ class TestUpsertToExcel(unittest.TestCase):
         1  |  A   |  10
         2  |  B   |  20
         3  |  C   |  30
-        """
-
-    def test_column_order_change(self):
-        """列順序変更テスト"""
-        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
-        new_df = self.df[['name', 'value', 'id']]  # 列順序変更
-        upsert_to_excel(new_df, self.sheet_name, self.excel_file, self.unique_index)
-        headers, data = self._read_excel()
-        self.assertEqual(headers, ['name', 'value', 'id'])
-        self.assertEqual(data, new_df.values.tolist())
-        """想定されるHeadersとDataの内容を確認
-        name | value | id
-        -------------------
-         A   |  10   |  1
-         B   |  20   |  2
-         C   |  30   |  3
         """
 
     def test_combination(self):
@@ -300,6 +289,41 @@ class TestUpsertToExcel(unittest.TestCase):
         1  |  A   |  10
         2  |  B   |  20
         3  |  C   |  30
+        """
+
+    def test_preserve_existing_custom_columns(self):
+        """既存にしかないカスタム列が残るテスト"""
+        # まず標準データを書き込み
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        # Excelにカスタム列を追加
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        ws.cell(row=1, column=4, value='custom_col')  # ヘッダーにカスタム列
+        for r in range(2, 5):  # データ行にカスタム値を追加
+            ws.cell(row=r, column=4, value=f'custom_{r-1}')
+        wb.save(self.excel_file)
+        # upsert（新規行追加）
+        new_df = self.df.copy()
+        new_df = pd.concat([new_df, pd.DataFrame({'id': [4], 'name': ['D'], 'value': [40]})], ignore_index=True)
+        upsert_to_excel(new_df, self.sheet_name, self.excel_file, self.unique_index)
+        # カスタム列が残っていることを確認
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        headers = [cell.value for cell in ws[1]]
+        self.assertIn('custom_col', headers)
+        custom_col_idx = headers.index('custom_col') + 1
+        self.assertEqual(ws.cell(row=2, column=custom_col_idx).value, 'custom_1')
+        self.assertEqual(ws.cell(row=3, column=custom_col_idx).value, 'custom_2')
+        self.assertEqual(ws.cell(row=4, column=custom_col_idx).value, 'custom_3')
+        # 新規行にもカスタム列がある（空）
+        self.assertIsNone(ws.cell(row=5, column=custom_col_idx).value)
+        """想定されるHeadersとDataの内容を確認
+        id | name | value | custom_col
+        --------------------------------
+        1  |  A   |  10   | custom_1
+        2  |  B   |  20   | custom_2
+        3  |  C   |  30   | custom_3
+        4  |  D   |  40   | 
         """
 
 if __name__ == '__main__':
