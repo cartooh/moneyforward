@@ -141,11 +141,15 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
     else:
         missing_rows = set()
         new_rows = set()
-    if new_columns or missing_columns or missing_rows:
-        # 列が一致しない場合、または行が削除された場合、シートを再書き込み
+    if new_columns or missing_columns or missing_rows or new_rows:
+        # 列が一致しない場合、または行が変更された場合、シートを再書き込み
         ws.delete_rows(1, ws.max_row)
-        for r, (_, row) in enumerate(df.iterrows(), 1):
-            for c, (col_name, value) in enumerate(row.items(), 1):
+        # ヘッダーを書き込む
+        for c, col_name in enumerate(df.columns, 1):
+            ws.cell(row=1, column=c, value=col_name)
+        # データを書き込む
+        for r, (_, row) in enumerate(df.iterrows(), 2):
+            for c, value in enumerate(row, 1):
                 ws.cell(row=r, column=c, value=value)
     else:
         # 列が一致する場合、差分更新
