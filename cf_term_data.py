@@ -201,42 +201,6 @@ def parse_header(header_list):
     return select_header, rename_header, dtypes_dict
 
 
-def read_existing_data(ws):
-    """
-    ワークシートから既存データを読み込み、headers と existing_df を返す。
-    
-    引数:
-        ws: openpyxl.Worksheet オブジェクト。
-    
-    戻り値:
-        tuple: (headers, existing_df)
-            headers: ヘッダーのリスト。
-            existing_df: 既存データのDataFrame（'excel_row'列を含む）。
-    """
-    existing_data = []
-    row_numbers = []
-    headers = []
-    header_len = 0
-    for row_idx, row in enumerate(ws.iter_rows(values_only=True), 1):
-        if row_idx == 1:
-            for i, h in enumerate(row):
-                if h is None:
-                    break
-            header_len = i
-            headers = row[:header_len]
-        else:
-            existing_data.append(row[:header_len])
-            row_numbers.append(row_idx)
-    
-    if existing_data:
-        existing_df = pd.DataFrame(existing_data, columns=headers)
-        existing_df['excel_row'] = row_numbers
-    else:
-        existing_df = pd.DataFrame()
-        existing_df['excel_row'] = []
-    
-    return headers, existing_df
-
 
 def load_excel_sheet(excel_file, sheet_name, unique_index_label):
     """
@@ -269,7 +233,28 @@ def load_excel_sheet(excel_file, sheet_name, unique_index_label):
         # シートが存在する場合
         ws = wb[sheet_name]
     
-    headers, existing_df = read_existing_data(ws)
+    # ワークシートから既存データを読み込み
+    existing_data = []
+    row_numbers = []
+    headers = []
+    header_len = 0
+    for row_idx, row in enumerate(ws.iter_rows(values_only=True), 1):
+        if row_idx == 1:
+            for i, h in enumerate(row):
+                if h is None:
+                    break
+            header_len = i
+            headers = row[:header_len]
+        else:
+            existing_data.append(row[:header_len])
+            row_numbers.append(row_idx)
+    
+    if existing_data:
+        existing_df = pd.DataFrame(existing_data, columns=headers)
+        existing_df['excel_row'] = row_numbers
+    else:
+        existing_df = pd.DataFrame()
+        existing_df['excel_row'] = []
     
     # 既存データがある場合（ヘッダーあり）、unique_index_label の列チェック
     if headers and unique_index_label not in headers:
