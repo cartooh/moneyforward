@@ -168,37 +168,61 @@ def upsert(frame, name: str, unique_index_label, con):
     table.insert(method=_execute_insert)
 
 
-def parse_header(header_list):
-    select_header = []
-    rename_header = {}
-    dtypes_dict = {}
+def read_existing_data_from_sheet(ws, unique_index_label, sheet_name):
+    """
+    ワークシートから既存データを読み込み、headers と existing_df を返す。
     
-    for item in header_list:
-        # まず : で型を分離
-        if ':' in item:
-            name_part, dtype = item.rsplit(':', 1)  # 右からsplitして最後の:を型とする
-        else:
-            name_part = item
-            dtype = None
+    引数:
+        ws: openpyxl.Worksheet オブジェクト。
+        unique_index_label (str): ユニークインデックス列名。
+        sheet_name (str): シート名（エラーメッセージ用）。
+    
+    戻り値:
+        tuple: (existing_df, headers)
+            existing_df: 既存データのDataFrame（'excel_row'列を含む）。
+            headers: ヘッダーのリスト。
+    
+    例外:
+        ValueError: 既存シートにunique_index_label列がない場合（headersが存在する場合のみ）。
+    """
+    existing_data = []
+    row_numbers = []
+    headers = []
+    header_len = 0
+    unique_idx = None
+    
+    # ヘッダー行を処理
+    header_rows = list(ws.iter_rows(values_only=True, min_row=1, max_row=1))
+    if header_rows:
+        header_row = header_rows[0]
+        for i, h in enumerate(header_row):
+            if h is None:
+                break
+        header_len = i
+        headers = header_row[:header_len]
+        # headersが存在する場合のみunique_index_label の存在確認
+        if headers and unique_index_label not in headers:
+            raise ValueError(f"unique_index_label '{unique_index_label}' column not found in existing sheet '{sheet_name}': {headers}")
+        if headers:
+            unique_idx = headers.index(unique_index_label)
         
-        # 次に = でnameとaliasを分離
-        if '=' in name_part:
-            name, alias = name_part.split('=', 1)
-            rename_header[name] = alias
-            select_header.append(name)
-            if dtype:
-                dtypes_dict[alias] = dtype  # エイリアス後の型はaliasに適用
-            else:
-                dtypes_dict[alias] = 'object'
-        else:
-            name = name_part
-            select_header.append(name)
-            if dtype:
-                dtypes_dict[name] = dtype
-            else:
-                dtypes_dict[name] = 'object'
+        # データ行を処理 (2行目から)
+        for row_idx, row in enumerate(ws.iter_rows(values_only=True, min_row=2), 2):
+            if unique_idx is not None:
+                val = row[unique_idx]
+                if pd.isna(val) or val == '':
+                    break  # 無効な値なので、それ以降は読み込まない
+            existing_data.append(row[:header_len])
+            row_numbers.append(row_idx)
     
-    return select_header, rename_header, dtypes_dict
+    if existing_data:
+        existing_df = pd.DataFrame(existing_data, columns=headers)
+        existing_df['excel_row'] = row_numbers
+    else:
+        existing_df = pd.DataFrame()
+        existing_df['excel_row'] = []
+    
+    return existing_df, headers
 
 
 
@@ -219,7 +243,7 @@ def load_excel_sheet(excel_file, sheet_name, unique_index_label):
             headers: ヘッダーのリスト。
     
     例外:
-        ValueError: 既存シートにunique_index_label列がない場合。
+        ValueError: 既存シートにunique_index_label列がない場合（headersが存在する場合のみ）。
     """
     if not os.path.exists(excel_file):
         # ファイルとシートを新規作成
@@ -233,37 +257,7 @@ def load_excel_sheet(excel_file, sheet_name, unique_index_label):
         # シートが存在する場合
         ws = wb[sheet_name]
     
-    # ワークシートから既存データを読み込み
-    existing_data = []
-    row_numbers = []
-    headers = []
-    header_len = 0
-    unique_idx = None
-    for row_idx, row in enumerate(ws.iter_rows(values_only=True), 1):
-        if row_idx == 1:
-            for i, h in enumerate(row):
-                if h is None:
-                    break
-            header_len = i
-            headers = row[:header_len]
-            # unique_index_label の存在確認
-            if unique_index_label not in headers:
-                raise ValueError(f"unique_index_label '{unique_index_label}' column not found in existing sheet '{sheet_name}'")
-            unique_idx = headers.index(unique_index_label)
-        else:
-            if unique_idx is not None:
-                val = row[unique_idx]
-                if pd.isna(val) or val == '':
-                    break  # 無効な値なので、それ以降は読み込まない
-            existing_data.append(row[:header_len])
-            row_numbers.append(row_idx)
-    
-    if existing_data:
-        existing_df = pd.DataFrame(existing_data, columns=headers)
-        existing_df['excel_row'] = row_numbers
-    else:
-        existing_df = pd.DataFrame()
-        existing_df['excel_row'] = []
+    existing_df, headers = read_existing_data_from_sheet(ws, unique_index_label, sheet_name)
     
     return wb, ws, existing_df, headers
 
