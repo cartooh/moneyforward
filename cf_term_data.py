@@ -238,6 +238,7 @@ def load_excel_sheet(excel_file, sheet_name, unique_index_label):
     row_numbers = []
     headers = []
     header_len = 0
+    unique_idx = None
     for row_idx, row in enumerate(ws.iter_rows(values_only=True), 1):
         if row_idx == 1:
             for i, h in enumerate(row):
@@ -245,7 +246,15 @@ def load_excel_sheet(excel_file, sheet_name, unique_index_label):
                     break
             header_len = i
             headers = row[:header_len]
+            # unique_index_label の存在確認
+            if unique_index_label not in headers:
+                raise ValueError(f"unique_index_label '{unique_index_label}' column not found in existing sheet '{sheet_name}'")
+            unique_idx = headers.index(unique_index_label)
         else:
+            if unique_idx is not None:
+                val = row[unique_idx]
+                if pd.isna(val) or val == '':
+                    break  # 無効な値なので、それ以降は読み込まない
             existing_data.append(row[:header_len])
             row_numbers.append(row_idx)
     
@@ -255,10 +264,6 @@ def load_excel_sheet(excel_file, sheet_name, unique_index_label):
     else:
         existing_df = pd.DataFrame()
         existing_df['excel_row'] = []
-    
-    # 既存データがある場合（ヘッダーあり）、unique_index_label の列チェック
-    if headers and unique_index_label not in headers:
-        raise ValueError(f"unique_index_label '{unique_index_label}' column not found in existing sheet '{sheet_name}'")
     
     return wb, ws, existing_df, headers
 
