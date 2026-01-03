@@ -106,7 +106,7 @@ def read_existing_data(ws):
     """
     existing_data = []
     row_numbers = []
-    headers = None
+    headers = []
     for row_idx, row in enumerate(ws.iter_rows(values_only=True), 1):
         if row_idx == 1:
             headers = list(row)
@@ -144,27 +144,17 @@ def load_excel_sheet(excel_file, sheet_name, unique_index_label):
         ValueError: 既存シートにunique_index_label列がない場合。
     """
     if not os.path.exists(excel_file):
-        # 新規作成
+        # ファイルとシートを新規作成
         wb = Workbook()
         ws = wb.active
         ws.title = sheet_name
-        existing_df = pd.DataFrame()
-        existing_df['excel_row'] = []
-        headers = []
-        return wb, ws, existing_df, headers
-    
-    # 既存のファイルを読み込む
-    wb = load_workbook(excel_file)
-    if sheet_name not in wb.sheetnames:
-        # シートが存在しない場合
+    elif sheet_name not in (wb := load_workbook(excel_file)).sheetnames:    
+        # 既存のファイルを開き、シートが存在しない場合、シートのみ新規作成
         ws = wb.create_sheet(sheet_name)
-        existing_df = pd.DataFrame()
-        existing_df['excel_row'] = []
-        headers = []
-        return wb, ws, existing_df, headers
+    else:
+        # シートが存在する場合
+        ws = wb[sheet_name]
     
-    # シートが存在する場合
-    ws = wb[sheet_name]
     headers, existing_df = read_existing_data(ws)
     
     # 既存データがある場合（ヘッダーあり）、unique_index_label の列チェック
