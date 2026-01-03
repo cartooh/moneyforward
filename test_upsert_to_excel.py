@@ -222,6 +222,17 @@ class TestUpsertToExcel(unittest.TestCase):
         self.assertEqual(data[-1][val_idx], 40)
         self.assertEqual(data[-1][new_col_idx], 'W')
 
+    def test_empty_sheet(self):
+        """空シートテスト"""
+        wb = Workbook()
+        ws = wb.active
+        ws.title = self.sheet_name
+        wb.save(self.excel_file)
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        headers, data = self._read_excel()
+        self.assertEqual(headers, list(self.df.columns))
+        self.assertEqual(data, self.df.values.tolist())
+
     def test_sheet_not_exist(self):
         """シート不存在テスト"""
         # まずSheet1を作成
