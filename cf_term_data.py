@@ -13,7 +13,7 @@ from time import sleep
 from random import uniform
 from tqdm import tqdm
 import os
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 logger = logging.getLogger(__name__)
@@ -59,10 +59,40 @@ def upsert(frame, name: str, unique_index_label, con):
     table.insert(method=_execute_insert)
 
 
-def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
-    from openpyxl import load_workbook
-    from openpyxl.utils.dataframe import dataframe_to_rows
+def parse_header(header_list):
+    select_header = []
+    rename_header = {}
+    dtypes_dict = {}
     
+    for item in header_list:
+        # まず : で型を分離
+        if ':' in item:
+            name_part, dtype = item.rsplit(':', 1)  # 右からsplitして最後の:を型とする
+        else:
+            name_part = item
+            dtype = None
+        
+        # 次に = でnameとaliasを分離
+        if '=' in name_part:
+            name, alias = name_part.split('=', 1)
+            rename_header[name] = alias
+            select_header.append(name)
+            if dtype:
+                dtypes_dict[alias] = dtype  # エイリアス後の型はaliasに適用
+            else:
+                dtypes_dict[alias] = 'object'
+        else:
+            name = name_part
+            select_header.append(name)
+            if dtype:
+                dtypes_dict[name] = dtype
+            else:
+                dtypes_dict[name] = 'object'
+    
+    return select_header, rename_header, dtypes_dict
+
+
+def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
     if os.path.exists(excel_file):
         # 既存のファイルを読み込む
         wb = load_workbook(excel_file)
@@ -70,44 +100,104 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label):
             ws = wb[sheet_name]
             # 既存データを読み込む
             existing_data = []
-            for row in ws.iter_rows(values_only=True):
-                existing_data.append(row)
+            row_numbers = []
+            for row_idx, row in enumerate(ws.iter_rows(values_only=True), 1):
+                if row_idx == 1:
+                    headers = list(row)
+                else:
+                    existing_data.append(row)
+                    row_numbers.append(row_idx)
+
             if existing_data:
-                existing_df = pd.DataFrame(existing_data[1:], columns=existing_data[0])  # ヘッダー行を除く
+                existing_df = pd.DataFrame(existing_data, columns=headers)
+                existing_df['excel_row'] = row_numbers
             else:
                 existing_df = pd.DataFrame()
+                existing_df['excel_row'] = []
         else:
             # シートが存在しない場合
             ws = wb.create_sheet(sheet_name)
             existing_df = pd.DataFrame()
-        
-        # id をキーにしてマージ（更新と新規追加）
-        if unique_index_label in existing_df.columns and unique_index_label in df.columns:
-            existing_df = existing_df.set_index(unique_index_label)
-            df = df.set_index(unique_index_label)
-            existing_df.update(df)
-            # 新規データを追加
-            new_rows = df[~df.index.isin(existing_df.index)]
-            existing_df = pd.concat([existing_df, new_rows])
-            existing_df = existing_df.reset_index()
-        else:
-            # ユニークインデックスがない場合、単に結合
-            existing_df = pd.concat([existing_df, df]).drop_duplicates()
+            existing_df['excel_row'] = []
+            headers = []
     else:
         # 新規作成
-        from openpyxl import Workbook
         wb = Workbook()
         ws = wb.active
         ws.title = sheet_name
-        existing_df = df
+        existing_df = pd.DataFrame()
+        existing_df['excel_row'] = []
+        headers = []
     
-    # シートをクリア
-    ws.delete_rows(1, ws.max_row)
-    
-    # 新しいデータを書き込む
-    for r, row in enumerate(dataframe_to_rows(existing_df, index=False, header=True), 1):
-        for c, value in enumerate(row, 1):
-            ws.cell(row=r, column=c, value=value)
+    # ヘッダーが同じかどうか確認し、新しい列に対応
+    new_columns = [col for col in df.columns if col not in headers]
+    missing_columns = [col for col in headers if col not in df.columns]
+    # 行の変更をチェック
+    if unique_index_label and unique_index_label in existing_df.columns and unique_index_label in df.columns:
+        existing_ids = set(existing_df[unique_index_label])
+        new_ids = set(df[unique_index_label])
+        missing_rows = existing_ids - new_ids
+        new_rows = new_ids - existing_ids
+    else:
+        missing_rows = set()
+        new_rows = set()
+    if new_columns or missing_columns or missing_rows:
+        # 列が一致しない場合、または行が削除された場合、シートを再書き込み
+        ws.delete_rows(1, ws.max_row)
+        for r, (_, row) in enumerate(df.iterrows(), 1):
+            for c, (col_name, value) in enumerate(row.items(), 1):
+                ws.cell(row=r, column=c, value=value)
+    else:
+        # 列が一致する場合、差分更新
+        # ユニークインデックスがある場合
+        if unique_index_label in existing_df.columns and unique_index_label in df.columns:
+            # インデックスを設定
+            existing_df_indexed = existing_df.set_index(unique_index_label)
+            df_indexed = df.set_index(unique_index_label)
+            
+            # 共通のインデックス
+            common_indices = existing_df_indexed.index.intersection(df_indexed.index)
+            
+            # 変更された行を特定（共通インデックスで値が異なる行）
+            if not common_indices.empty:
+                # 共通の列で比較
+                common_cols = existing_df_indexed.columns.intersection(df_indexed.columns).drop('excel_row', errors='ignore')
+                existing_for_cmp = existing_df_indexed[common_cols]
+                df_for_cmp = df_indexed[common_cols]
+                changed_mask = (existing_for_cmp.loc[common_indices] != df_for_cmp.loc[common_indices]).any(axis=1)
+                changed_indices = common_indices[changed_mask]
+                
+                # 変更された行のExcel行番号を取得
+                changed_rows = existing_df_indexed.loc[changed_indices, 'excel_row']
+                
+                # 変更されたセルを更新
+                for idx in changed_indices:
+                    row_num = changed_rows.loc[idx]
+                    row_data = pd.Series([idx] + list(df_indexed.loc[idx]), index=[unique_index_label] + list(df_indexed.columns))
+                    for col_idx, value in enumerate(row_data, 1):
+                        ws.cell(row=row_num, column=col_idx, value=value)
+            
+            # 新規行を追加
+            new_indices = df_indexed.index.difference(existing_df_indexed.index)
+            if not new_indices.empty:
+                new_df = df_indexed.loc[new_indices].reset_index()
+                # ヘッダー後の次の行から追加
+                start_row = ws.max_row + 1
+                for r, (_, row) in enumerate(new_df.iterrows(), start_row):
+                    for c, (col_name, value) in enumerate(row.items(), 1):
+                        ws.cell(row=r, column=c, value=value)
+        else:
+            # ユニークインデックスがない場合、新規データを追加
+            if not df.empty:
+                start_row = ws.max_row + 1 if ws.max_row > 0 else 1
+                if start_row == 1:
+                    # ヘッダーを書き込む
+                    for c, col_name in enumerate(df.columns, 1):
+                        ws.cell(row=1, column=c, value=col_name)
+                    start_row = 2
+                for r, (_, row) in enumerate(df.iterrows(), start_row):
+                    for c, value in enumerate(row, 1):
+                        ws.cell(row=r, column=c, value=value)
     
     # 保存
     while True:
@@ -239,14 +329,16 @@ def get_term_data(s, args):
     
     if args.sqlite:
         if args.sqlite_header:
-            select_header = [x.split("=", 2)[0] for x in args.sqlite_header]
+            select_header, rename_header, dtypes_dict = parse_header(args.sqlite_header)
             for c in set(select_header) - set(term_data_list.columns):
                 term_data_list[c] = None
             term_data_list = term_data_list[select_header]
             
-            rename_header = dict(x.split("=", 2) for x in args.sqlite_header if x.find('=') != -1)
             if rename_header:
-                term_data_list=term_data_list.rename(columns=rename_header)
+                term_data_list = term_data_list.rename(columns=rename_header)
+            
+            # dtypesを適用
+            term_data_list = term_data_list.astype(dtypes_dict)
             
         with closing(sqlite3.connect(args.sqlite)) as con:
             upsert(term_data_list, 'user_asset_act', 'id', con)
@@ -254,14 +346,16 @@ def get_term_data(s, args):
     
     if args.excel:
         if args.excel_header:
-            select_header = [x.split("=", 2)[0] for x in args.excel_header]
+            select_header, rename_header, dtypes_dict = parse_header(args.excel_header)
             for c in set(select_header) - set(term_data_list.columns):
                 term_data_list[c] = None
             term_data_list = term_data_list[select_header]
             
-            rename_header = dict(x.split("=", 2) for x in args.excel_header if x.find('=') != -1)
             if rename_header:
-                term_data_list=term_data_list.rename(columns=rename_header)
+                term_data_list = term_data_list.rename(columns=rename_header)
+            
+            # dtypesを適用
+            term_data_list = term_data_list.astype(dtypes_dict)
             
         upsert_to_excel(term_data_list, 'user_asset_act', args.excel, 'id')
         return
@@ -285,10 +379,10 @@ def main(argv=None):
     group.add_argument('--sqlite')
     group.add_argument('--excel')
     parser.add_argument('--csv_header', nargs='+')
-    sqlite_header = """id date year month account_id sub_account_id is_transfer is_income
+    sqlite_header = """id:str date year month account_id:str sub_account_id:str is_transfer is_income
                        orig_content=content orig_amount=amount currency jpyrate memo 
                        large_category_id middle_category_id large_category middle_category
-                       is_target partner_account_id partner_sub_account_id partner_act_id
+                       is_target partner_account_id:str partner_sub_account_id:str partner_act_id:str
                        created_at recognized_at updated_at sub_account_id_hash transfer_type
                        account.account.service_id=service_id
                        account.account.service_category_id=service_category_id
