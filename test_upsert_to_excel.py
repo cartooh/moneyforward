@@ -293,5 +293,40 @@ class TestUpsertToExcel(unittest.TestCase):
         self.assertEqual(headers, list(self.df.columns))
         self.assertEqual(data, self.df.values.tolist())
 
+    def test_upsert_with_distant_cell_write(self):
+        """一度データをupsertした後、離れたセルに書き込み、再度書き込めるかを確認するテスト"""
+        # まずデータをupsert
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        # Excelを開いて、離れたセルに書き込み
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        # データは行1-4（ヘッダー+3行）、列1-3
+        # 離れたセル: 行10、列10 に書き込み
+        ws.cell(row=10, column=10, value="distant_value")
+        wb.save(self.excel_file)
+        # 再度 upsert（データを変更して）
+        new_df = self.df.copy()
+        new_df.loc[0, 'value'] = 999  # 変更
+        upsert_to_excel(new_df, self.sheet_name, self.excel_file, self.unique_index)
+        # 結果を確認
+        headers, data = self._read_excel()
+        self.assertEqual(headers[:len(list(self.df.columns))], list(self.df.columns))
+        self.assertGreater(len(headers), len(list(self.df.columns)))  # 列数は減っていない
+        self.assertEqual(headers[len(list(self.df.columns))], None)
+
+        # データが更新されているか
+        self.assertEqual(data[0][2], 999)  # value が更新
+        data_len = len(self.df)
+        # data の長さが正しく、離れたセルを含まないことを確認
+        self.assertGreater(len(data), data_len)  # データ行は3行
+        # 各データ行が有効（Noneでない）ことを確認
+        for row in data[:data_len]:
+            self.assertIsNotNone(row[0])  # id が None でない
+        self.assertEqual(data[data_len][0], None)  # 余分な行は None
+        # 離れたセルの値が残っているか（wsに直接アクセス）
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        self.assertEqual(ws.cell(row=10, column=10).value, "distant_value")
+
 if __name__ == '__main__':
     unittest.main()
