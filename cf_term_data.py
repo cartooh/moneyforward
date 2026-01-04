@@ -58,83 +58,87 @@ def save_workbook(wb, excel_file):
             input()
 
 
-def manage_table(ws, table_name, new_max_col, new_max_row):
+def has_overlapped_range_table(ws, new_range: tuple, table_name: str) -> bool:
+    if not ws.tables:
+        return False
+    
+    for other_name, other_table in ws.tables.items():
+        if other_name == table_name:
+            continue
+        other_range = range_boundaries(other_table)
+        if is_range_overlapping(new_range, other_range):
+            warnings.warn(f"Range overlap detected with table '{other_name}', skipping table operation for '{table_name}'.")
+            return True
+    return False
+
+def add_new_table(ws, table_name: str, new_max_col: int, new_max_row: int):
+    """
+    Add a new Excel table to the worksheet.
+    
+    Args:
+        ws: openpyxl の Worksheet
+        table_name: str
+        new_max_col: int
+        new_max_row: int
+    """
+    if new_max_col <= 1 or new_max_row <= 1:
+        warnings.warn(f"Cannot create table '{table_name}' with insufficient size: cols={new_max_col}, rows={new_max_row}.")
+        return
+
+    table_ref = f"A1:{get_column_letter(new_max_col)}{new_max_row}"
+    new_range = (1, 1, new_max_col, new_max_row)
+    # 重複チェック
+    if has_overlapped_range_table(ws, new_range, table_name):
+        return
+    table = Table(displayName=table_name, ref=table_ref)
+    style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+    table.tableStyleInfo = style
+    ws.add_table(table)
+
+def manage_table(ws, table_name: str, new_max_col: int, new_max_row: int):
     """
     Manage Excel table: create or update based on table_name.
     
     Args:
         ws: openpyxl.Worksheet
         table_name: str
-        new_max_col: int
+        new_max_col: int(新規作成のみ使用。更新時は行のみ反映し、列は使用しない。Excelファイルが壊れるため)
         new_max_row: int
     """
     if ws.tables:
         # 引数のテーブル名が存在するか確認
         if table_name in ws.tables:
             table = ws.tables[table_name]
-            min_col, min_row, max_col, max_row = range_boundaries(table.ref)
-            new_range = (min_col, min_row, new_max_col, new_max_row)
+            min_col, min_row, max_col, _ = range_boundaries(table.ref)
+            # 既存テーブルの範囲の、行のみ更新
+            new_range = (min_col, min_row, max_col, new_max_row)
             # 重複チェック
-            for other_name, other_table in ws.tables.items():
-                if other_name != table_name:
-                    other_range = range_boundaries(other_table.ref)
-                    if is_range_overlapping(new_range, other_range):
-                        warnings.warn(f"Range overlap detected with table '{other_name}', skipping table update for '{table_name}'.")
-                        return
-            if min_col == 1 and min_row == 1:
-                # A1を含む：範囲を広げる
-                new_ref = f"{get_column_letter(min_col)}{min_row}:{get_column_letter(new_max_col)}{new_max_row}"
-                table.ref = new_ref
-            else:
-                # A1を含まない：範囲を広げる、警告
+            if has_overlapped_range_table(ws, new_range, table_name):
+                return
+            if not (min_col == 1 and min_row == 1):
+                # A1を含まない場合、警告
                 warnings.warn(f"Table '{table_name}' does not include A1, but expanding its range.")
-                new_ref = f"{get_column_letter(min_col)}{min_row}:{get_column_letter(new_max_col)}{new_max_row}"
-                table.ref = new_ref
+            new_ref = f"{get_column_letter(min_col)}{min_row}:{get_column_letter(new_max_col)}{new_max_row}"
+            table.ref = new_ref
         else:
             # 引数のテーブル名が存在しない：A1を含むテーブルを探す
             a1_table = None
             for t in ws.tables.values():
-                min_col, min_row, max_col, max_row = range_boundaries(t.ref)
+                min_col, min_row, _, _ = range_boundaries(t.ref)
                 if min_col == 1 and min_row == 1:
                     a1_table = t
                     break
             if a1_table:
                 # A1を含むテーブルがある：そのテーブルを広げる、警告
                 warnings.warn(f"Table '{table_name}' not found, using A1-containing table '{a1_table.displayName}' and expanding its range.")
-                min_col, min_row, max_col, max_row = range_boundaries(a1_table.ref)
-                new_range = (min_col, min_row, new_max_col, new_max_row)
-                # 重複チェック
-                for other_name, other_table in ws.tables.items():
-                    if other_table != a1_table:
-                        other_range = range_boundaries(other_table.ref)
-                        if is_range_overlapping(new_range, other_range):
-                            warnings.warn(f"Range overlap detected with table '{other_name}', skipping table update for '{a1_table.displayName}'.")
-                            return
-                new_ref = f"{get_column_letter(min_col)}{min_row}:{get_column_letter(new_max_col)}{new_max_row}"
-                a1_table.ref = new_ref
+                manage_table(ws, a1_table.displayName, new_max_col, new_max_row)
             else:
                 # A1を含むテーブルがない：新規作成
                 warnings.warn(f"Table '{table_name}' not found and no A1-containing table, creating new table '{table_name}'.")
-                table_ref = f"A1:{get_column_letter(new_max_col)}{new_max_row}"
-                new_range = (1, 1, new_max_col, new_max_row)
-                # 重複チェック
-                for other_name, other_table in ws.tables.items():
-                    other_range = range_boundaries(other_table.ref)
-                    if is_range_overlapping(new_range, other_range):
-                        warnings.warn(f"Range overlap detected with table '{other_name}', skipping table creation for '{table_name}'.")
-                        return
-                table = Table(displayName=table_name, ref=table_ref)
-                style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=False)
-                table.tableStyleInfo = style
-                ws.add_table(table)
+                add_new_table(ws, table_name, new_max_col, new_max_row)
     else:
         # テーブルが存在しない：新規作成
-        if new_max_row > 1:  # データがある場合のみ
-            table_ref = f"A1:{get_column_letter(new_max_col)}{new_max_row}"
-            table = Table(displayName=table_name, ref=table_ref)
-            style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=False)
-            table.tableStyleInfo = style
-            ws.add_table(table)
+        add_new_table(ws, table_name, new_max_col, new_max_row)
 
 
 def upsert(frame, name: str, unique_index_label, con):
