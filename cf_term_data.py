@@ -335,7 +335,7 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label, table_name="
     # 2-1. 新規行の追加
     rows_to_add = new_ids - existing_ids
     if rows_to_add:
-        start_row = ws.max_row + 1
+        start_row = 1 + len(existing_df) + 1  # ヘッダー行 + 既存データ行 の 次の行
         for idx in rows_to_add:
             row_data = df_indexed.loc[idx]
             # unique_index_label の値も書き込む
