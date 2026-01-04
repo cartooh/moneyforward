@@ -2,8 +2,10 @@ import unittest
 import pandas as pd
 import os
 import tempfile
+import warnings
 from openpyxl import load_workbook, Workbook
 from openpyxl.utils import range_boundaries
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
 # cf_term_data.py から upsert_to_excel をインポート
 from cf_term_data import upsert_to_excel, load_excel_sheet
@@ -346,6 +348,151 @@ class TestUpsertToExcel(unittest.TestCase):
             # 離れたデータがテーブルに含まれていないことを確認
             self.assertNotEqual(max_row, 10, "Table includes distant row")
             self.assertNotEqual(max_col, 10, "Table includes distant column")
+
+    def test_manage_table_existing_table_a1_with_overlap(self):
+        """既存テーブル（A1含む）で範囲拡張時に重複がある場合のテスト"""
+        # 初期データを書き込み
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        # Excelを開いて、重複するテーブルを追加
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        # 既存テーブルはA1:C4くらい
+        existing_table_ref = ws.tables["DataTable"].ref
+        # 重複するテーブルを追加: 例 B5:C7
+        ws.cell(row=5, column=2, value="Overlap1")
+        ws.cell(row=5, column=3, value="Overlap2")
+        ws.cell(row=6, column=2, value="Data1")
+        ws.cell(row=6, column=3, value="Data2")
+        ws.cell(row=7, column=2, value="Data3")
+        ws.cell(row=7, column=3, value="Data4")
+        overlapping_table = Table(displayName="OverlapTable", ref="B5:C7")
+        ws.add_table(overlapping_table)
+        wb.save(self.excel_file)
+        # input(f"{self.excel_file} modified, press Enter to continue...")
+
+        # 新規行を追加してupsert（範囲拡張）
+        new_df = self.df.copy()
+        new_df = pd.concat([new_df, pd.DataFrame({'id': [4], 'name': ['D'], 'value': [40]})], ignore_index=True)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            upsert_to_excel(new_df, self.sheet_name, self.excel_file, self.unique_index)
+            # 警告が発生することを確認
+            self.assertTrue(any("Range overlap detected" in str(warning.message) for warning in w))
+        # テーブル範囲が変わっていないことを確認
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        table = ws.tables["DataTable"]
+        min_col, min_row, max_col, max_row = range_boundaries(table.ref)
+        # 初期範囲はA1:C4、拡張されないはず
+        self.assertEqual(table.ref, existing_table_ref)
+        self.assertEqual(max_row, 4)
+
+    def test_manage_table_existing_table_non_a1(self):
+        """既存テーブル（A1含まない）で範囲拡張する場合のテスト"""
+        # 初期データを書き込み
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        # Excelを開いて、テーブルをA1を含まない位置に変更
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        ws.tables["DataTable"].ref = "B1:D4"  # テーブル範囲をB1からに変更
+        ws.insert_cols(1)  # 列Aを挿入して、テーブルをB2からに移動
+        wb.save(self.excel_file)
+        # 新規行を追加してupsert
+        new_df = self.df.copy()
+        new_df = pd.concat([new_df, pd.DataFrame({'id': [4], 'name': ['D'], 'value': [40]})], ignore_index=True)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            upsert_to_excel(new_df, self.sheet_name, self.excel_file, self.unique_index)
+            # 警告が発生することを確認
+            self.assertTrue(any("Table 'DataTable' does not include A1" in str(warning.message) for warning in w))
+        # 範囲が拡張されていることを確認
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        table = ws.tables["DataTable"]
+        min_col, min_row, max_col, max_row = range_boundaries(table.ref)
+        self.assertEqual(max_row, 5)  # 拡張されている
+        # input(f"{self.excel_file} modified, press Enter to continue...")
+
+    def test_manage_table_no_target_table_with_a1_table(self):
+        """引数のテーブルが存在せず、A1を含むテーブルが存在する場合のテスト"""
+        # 初期データを書き込み（DataTable作成）
+        upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+        # 新規行を追加したDFを異なるtable_nameでupsert
+        new_df = self.df.copy()
+        new_df = pd.concat([new_df, pd.DataFrame({'id': [4], 'name': ['D'], 'value': [40]})], ignore_index=True)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            upsert_to_excel(new_df, self.sheet_name, self.excel_file, self.unique_index, table_name="NewTable")
+            # 警告が発生することを確認
+            self.assertTrue(any("Table 'NewTable' not found, using A1-containing table" in str(warning.message) for warning in w))
+        # DataTableの範囲が拡張されていることを確認
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        table = ws.tables["DataTable"]
+        min_col, min_row, max_col, max_row = range_boundaries(table.ref)
+        self.assertGreater(max_row, 4)
+
+    def test_manage_table_no_target_table_no_a1_table(self):
+        """引数のテーブルが存在せず、A1を含むテーブルも存在しない場合のテスト"""
+        # Excelを開いて、テーブルを削除
+        wb = Workbook()
+        ws = wb.active
+        ws.title = self.sheet_name
+        ws.cell(row=1, column=1, value="id")
+        ws.cell(row=2, column=1, value=2)
+        # 追加されるテーブルはA1:C4くらい。これと重複しない関係ないテーブルをE1:F3テーブルを追加
+        ws.cell(row=1, column=5, value="Other1")
+        ws.cell(row=1, column=6, value="Other2")
+        ws.cell(row=2, column=5, value="Data1")
+        ws.cell(row=2, column=6, value="Data2")
+        ws.cell(row=3, column=5, value="Data3")
+        ws.cell(row=3, column=6, value="Data4")
+        other_table = Table(displayName="OtherTable", ref="E1:F3")
+        ws.add_table(other_table)
+        wb.save(self.excel_file)
+        # 異なるtable_nameでupsert
+        new_df = self.df.copy()
+        new_df = pd.concat([new_df, pd.DataFrame({'id': [4], 'name': ['D'], 'value': [40]})], ignore_index=True)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            upsert_to_excel(new_df, self.sheet_name, self.excel_file, self.unique_index, table_name="NewTable")
+            print("Warnings in no_a1:", [str(warning.message) for warning in w])  # デバッグ
+            # 警告が発生することを確認
+            self.assertTrue(any("Table 'NewTable' not found and no A1-containing table, creating new table" in str(warning.message) for warning in w))
+        # 新規テーブルが作成されていることを確認
+        wb = load_workbook(self.excel_file)
+        ws = wb[self.sheet_name]
+        self.assertIn("NewTable", ws.tables)
+        # input(f"{self.excel_file} modified, press Enter to continue...")
+
+    # def test_manage_table_new_table_with_overlap(self):
+    #     """新規テーブル作成時に範囲重複がある場合のテスト"""
+    #     # 初期データを書き込み
+    #     upsert_to_excel(self.df, self.sheet_name, self.excel_file, self.unique_index)
+    #     # Excelを開いて、範囲を広げる
+    #     wb = load_workbook(self.excel_file)
+    #     ws = wb[self.sheet_name]
+    #     table = ws.tables["DataTable"]
+    #     table.ref = "A1:Z10"  # 大きくする
+    #     wb.save(self.excel_file)
+    #     # 新規シートでupsert（同じファイル）
+    #     new_sheet = 'Sheet2'
+    #     with warnings.catch_warnings(record=True) as w:
+    #         warnings.simplefilter("always")
+    #         upsert_to_excel(self.df, new_sheet, self.excel_file, self.unique_index, table_name="NewTable")
+    #         # 警告が発生することを確認（重複チェック）
+    #         # 新規シートなので重複しないはずだが、テストのために
+    #         # 実際には新規シートなので重複しない
+    #     # 代わりに、既存シートに重複するテーブルを追加
+    #     wb = load_workbook(self.excel_file)
+    #     ws = wb[self.sheet_name]
+    #     overlapping_table = Table(displayName="Overlap", ref="A1:C4")
+    #     ws.add_table(overlapping_table)
+    #     wb.save(self.excel_file)
+    #     # 再度upsertで新規テーブル作成を試みるが、table_nameが異なる
+    #     # 既存のテーブルと重複する新規テーブル
+    #     # manage_tableは新規作成時に重複チェック
+    #     # テストしにくいので、スキップ
 
 if __name__ == '__main__':
     unittest.main()
