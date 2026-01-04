@@ -3,9 +3,10 @@ import pandas as pd
 import os
 import tempfile
 from openpyxl import load_workbook, Workbook
+from openpyxl.utils import range_boundaries
 
 # cf_term_data.py から upsert_to_excel をインポート
-from cf_term_data import upsert_to_excel
+from cf_term_data import upsert_to_excel, load_excel_sheet
 
 class TestUpsertToExcel(unittest.TestCase):
 
@@ -317,16 +318,34 @@ class TestUpsertToExcel(unittest.TestCase):
         # データが更新されているか
         self.assertEqual(data[0][2], 999)  # value が更新
         data_len = len(self.df)
-        # data の長さが正しく、離れたセルを含まないことを確認
         self.assertGreater(len(data), data_len)  # データ行は3行
         # 各データ行が有効（Noneでない）ことを確認
         for row in data[:data_len]:
             self.assertIsNotNone(row[0])  # id が None でない
         self.assertEqual(data[data_len][0], None)  # 余分な行は None
+
+        _, _, existing_df, existing_headers = load_excel_sheet(self.excel_file, self.sheet_name, self.unique_index)
+        self.assertEqual(list(existing_headers), list(self.df.columns))
+        self.assertTrue(existing_df.drop('excel_row', axis=1).equals(new_df))
+
         # 離れたセルの値が残っているか（wsに直接アクセス）
         wb = load_workbook(self.excel_file)
         ws = wb[self.sheet_name]
         self.assertEqual(ws.cell(row=10, column=10).value, "distant_value")
+
+        # テーブル範囲がデータ範囲を超えていないかを確認
+        table_name = "DataTable"  # デフォルトのテーブル名
+        if table_name in ws.tables:
+            table = ws.tables[table_name]
+            min_col, min_row, max_col, max_row = range_boundaries(table.ref)
+            # データ範囲: 行1-4 (ヘッダー+3行), 列1-3
+            expected_max_row = 4
+            expected_max_col = 3
+            self.assertLessEqual(max_row, expected_max_row, f"Table max_row {max_row} exceeds expected {expected_max_row}")
+            self.assertLessEqual(max_col, expected_max_col, f"Table max_col {max_col} exceeds expected {expected_max_col}")
+            # 離れたデータがテーブルに含まれていないことを確認
+            self.assertNotEqual(max_row, 10, "Table includes distant row")
+            self.assertNotEqual(max_col, 10, "Table includes distant column")
 
 if __name__ == '__main__':
     unittest.main()

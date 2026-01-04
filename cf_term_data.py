@@ -343,6 +343,9 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label, table_name="
                     ws.cell(row=start_row, column=col_map[col], value=val)
             start_row += 1
 
+    # データのある最大行を計算 (ヘッダー + 既存データ行 + 新規追加行)
+    data_max_row = 1 + len(existing_df) + len(rows_to_add)
+
     # 2-2. 既存行の更新
     common_ids = new_ids & existing_ids
     if common_ids:
@@ -370,7 +373,7 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label, table_name="
     save_workbook(wb, excel_file)
     
     # テーブル処理
-    manage_table(ws, table_name, len(current_headers), ws.max_row)
+    manage_table(ws, table_name, len(current_headers), data_max_row)
     
     # 保存
     save_workbook(wb, excel_file)
