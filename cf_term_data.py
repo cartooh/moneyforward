@@ -488,6 +488,39 @@ def request_term_data(s, args):
     return pd.concat(term_data_list)
 
 
+def parse_header(header_list):
+    select_header = []
+    rename_header = {}
+    dtypes_dict = {}
+    
+    for item in header_list:
+        # まず : で型を分離
+        if ':' in item:
+            name_part, dtype = item.rsplit(':', 1)  # 右からsplitして最後の:を型とする
+        else:
+            name_part = item
+            dtype = None
+        
+        # 次に = でnameとaliasを分離
+        if '=' in name_part:
+            name, alias = name_part.split('=', 1)
+            rename_header[name] = alias
+            select_header.append(name)
+            if dtype:
+                dtypes_dict[alias] = dtype  # エイリアス後の型はaliasに適用
+            else:
+                dtypes_dict[alias] = 'object'
+        else:
+            name = name_part
+            select_header.append(name)
+            if dtype:
+                dtypes_dict[name] = dtype
+            else:
+                dtypes_dict[name] = 'object'
+    
+    return select_header, rename_header, dtypes_dict
+
+
 def get_term_data(s, args):
     with change_default_group(s):
         term_data_list = request_term_data(s, args)
