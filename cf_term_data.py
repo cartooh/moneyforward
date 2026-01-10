@@ -270,7 +270,7 @@ def load_excel_sheet(excel_file, sheet_name, unique_index_label):
     return wb, ws, existing_df, headers
 
 
-def upsert_to_excel(df, sheet_name, excel_file, unique_index_label, table_name="DataTable"):
+def upsert_to_excel(df, sheet_name, excel_file, unique_index_label, table_name="user_asset_act"):
     """
     ユニークインデックスを用いて差分更新を行い、DataFrameをExcelシートにアップサートします。
 
@@ -286,7 +286,7 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label, table_name="
         sheet_name (str): Excelシート名。
         excel_file (str): Excelファイルのパス。
         unique_index_label (str): 更新時に使うユニークインデックスとなる列名。dfおよび既存シート（存在する場合）に必須。
-        table_name (str): テーブル名。デフォルトは"DataTable"。
+        table_name (str): テーブル名。デフォルトは"user_asset_act"。
 
     例外:
         ValueError: dfが空、unique_index_labelが空、または既存シートにunique_index_label列がない場合。
@@ -305,6 +305,7 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label, table_name="
         raise ValueError("unique_index_label must be provided and not empty")
     
     wb, ws, existing_df, headers = load_excel_sheet(excel_file, sheet_name, unique_index_label)
+    tqdm.write(f"Loaded Excel file '{excel_file}', sheet '{sheet_name}'. Existing rows: {len(existing_df)}, Existing columns: {len(headers)}")
     
     # 1. 列の同期
     # dfにある列がheadersになければ追加
@@ -375,9 +376,11 @@ def upsert_to_excel(df, sheet_name, excel_file, unique_index_label, table_name="
     
     # テーブル処理前に保存
     save_workbook(wb, excel_file)
+    tqdm.write(f"Data upserted to Excel file '{excel_file}', sheet '{sheet_name}'. Total rows now: {data_max_row}, Total columns now: {len(current_headers)}")
     
     # テーブル処理
     manage_table(ws, table_name, len(current_headers), data_max_row)
+    tqdm.write(f"Table '{table_name}' managed in sheet '{sheet_name}'.")
     
     # 保存
     save_workbook(wb, excel_file)
@@ -564,7 +567,7 @@ def get_term_data(s, args):
             # dtypesを適用
             term_data_list = term_data_list.astype(dtypes_dict)
             
-        upsert_to_excel(term_data_list, 'user_asset_act', args.excel, 'id')
+        upsert_to_excel(term_data_list, args.excel_sheet_name, args.excel, 'id', args.excel_table_name)
         return
     
     print(*term_data_list.columns.tolist())
@@ -620,6 +623,8 @@ def main(argv=None):
                        """.split()
     parser.add_argument('--sqlite_header', nargs='+', default=sqlite_header)
     parser.add_argument('--excel_header', nargs='+', default=sqlite_header)  # 同じデフォルトを使用
+    parser.add_argument('--excel_sheet_name', default='user_asset_act')
+    parser.add_argument('--excel_table_name', default='user_asset_act')
     parser.add_argument('-i', '--ignore_KeyError', action='store_true')
     
     args = parser.parse_args(argv)
