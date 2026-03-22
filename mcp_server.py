@@ -293,7 +293,7 @@ def get_account_summaries(sub_type: str | None = None) -> list[dict]:
             }
             # 残高情報
             for det in sub.get("user_asset_det_summaries", []):
-                entry["balance"] = det.get("amount")
+                entry["balance"] = det.get("value")
                 entry["currency"] = det.get("currency_code", "JPY")
                 break  # 通常は1件
 
@@ -468,18 +468,18 @@ def summarize_transactions(
         )
 
     # date_from〜date_to でフィルタ
-    dt_from = datetime.strptime(date_from, "%Y-%m-%d")
-    dt_to = datetime.strptime(date_to, "%Y-%m-%d")
+    dt_from = datetime.strptime(date_from, "%Y-%m-%d").date()
+    dt_to = datetime.strptime(date_to, "%Y-%m-%d").date()
 
-    def parse_dt(s: str) -> datetime | None:
+    def parse_date(s: str):
         try:
-            return datetime.fromisoformat(s)
+            return datetime.fromisoformat(s).date()
         except Exception:
             return None
 
     acts = [
         a for a in acts
-        if (d := parse_dt(a.get("recognized_at", ""))) and dt_from <= d <= dt_to
+        if (d := parse_date(a.get("recognized_at", ""))) and dt_from <= d <= dt_to
     ]
 
     if not acts:
@@ -514,112 +514,6 @@ def summarize_transactions(
     }
 
 
-# === 残高検証 ===
-
-@mcp.tool()
-def verify_account_balance(
-    sub_account_id_hash: str,
-    date_from: str,
-    date_to: str,
-) -> dict:
-    """1口座の残高整合性を検証する。
-
-    取引の合計と実際の残高変動を比較し、
-    MoneyForwardに登録されている取引に欠落・重複がないか確認する。
-
-    残高検証ロジック:
-        期末残高(計算) = 期首残高 + Σ取引金額(振替除く)
-        不一致 = 期末残高(計算) - 期末残高(実際)
-
-    Args:
-        sub_account_id_hash: 口座ハッシュ（get_account_summaries で取得）
-        date_from: 開始日 "YYYY-MM-DD"
-        date_to: 終了日 "YYYY-MM-DD"
-    """
-    result = get_transactions_by_account(sub_account_id_hash, date_from, date_to)
-
-    balance_start = result.get("balance_start")
-    balance_end = result.get("balance_end")
-    transactions = result.get("transactions", [])
-
-    # 銀行残高の観点では振替も実際の入出金なので全取引を合計する
-    # （振替除外すると残高がずれる。複数口座の二重計上問題は口座ごとに個別クエリすることで回避済み）
-    transaction_sum = sum(t.get("amount", 0) or 0 for t in transactions)
-
-    if balance_start is None or balance_end is None:
-        return {
-            "sub_account_id_hash": sub_account_id_hash,
-            "date_from": date_from,
-            "date_to": date_to,
-            "balance_start": balance_start,
-            "balance_end_actual": balance_end,
-            "transaction_count": len(transactions),
-            "transaction_sum": transaction_sum,
-            "is_balanced": None,
-            "note": "残高情報が取得できませんでした。cf_term_data API のレスポンスフィールド名を確認してください。",
-        }
-
-    balance_end_calc = balance_start + transaction_sum
-    discrepancy = balance_end_calc - balance_end
-    is_balanced = abs(discrepancy) < 1  # 1円未満の誤差は無視
-
-    note = "残高が一致しています" if is_balanced else (
-        f"差異 {discrepancy:+,.0f}円: 取引の{'欠落' if discrepancy < 0 else '重複'}の可能性があります"
-    )
-
-    return {
-        "sub_account_id_hash": sub_account_id_hash,
-        "date_from": date_from,
-        "date_to": date_to,
-        "balance_start": balance_start,
-        "balance_end_actual": balance_end,
-        "balance_end_calculated": balance_end_calc,
-        "discrepancy": discrepancy,
-        "transaction_count": len(transactions),
-        "transaction_sum": transaction_sum,
-        "is_balanced": is_balanced,
-        "note": note,
-    }
-
-
-@mcp.tool()
-def verify_all_bank_accounts(date_from: str, date_to: str) -> list[dict]:
-    """全銀行口座の残高整合性を一括検証する。
-
-    get_account_summaries で銀行口座を列挙し、
-    各口座に対して verify_account_balance を実行する。
-    不一致が大きい口座を上位に並べて返す。
-
-    Args:
-        date_from: 開始日 "YYYY-MM-DD"
-        date_to: 終了日 "YYYY-MM-DD"
-    """
-    accounts = get_account_summaries(sub_type="銀行口座")
-    if not accounts:
-        # sub_type フィルタが効かない場合は全口座を対象にする
-        accounts = get_account_summaries()
-
-    results = []
-    for acc in accounts:
-        hash_val = acc.get("sub_account_id_hash")
-        if not hash_val:
-            continue
-        try:
-            res = verify_account_balance(hash_val, date_from, date_to)
-            res["service_name"] = acc.get("service_name", "")
-            res["sub_name"] = acc.get("sub_name", "")
-            results.append(res)
-        except Exception as e:
-            results.append({
-                "sub_account_id_hash": hash_val,
-                "service_name": acc.get("service_name", ""),
-                "sub_name": acc.get("sub_name", ""),
-                "error": str(e),
-            })
-
-    # 不一致の絶対値が大きい順に並べる
-    results.sort(key=lambda r: abs(r.get("discrepancy") or 0), reverse=True)
-    return results
 
 
 # -----------------------------------------------------------------------
