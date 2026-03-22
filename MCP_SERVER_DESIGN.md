@@ -108,15 +108,30 @@ with session_from_cookie_file(COOKIE_FILE) as s:
 
 ### 3.5 振替取引の扱い
 
-残高検証・集計では振替取引（`is_transfer=True`）を除外する。
-振替は口座間移動であり、収支の増減を伴わない。含めると二重計上になる。
+**残高検証では振替取引を含める（除外しない）。**
+
+銀行残高の観点では「振替」という概念は存在せず、振替による入出金も実際の残高変動を伴う。
+除外すると残高計算がずれる。
 
 ```python
-# 残高検証ロジック
-amount_sum = sum(t["amount"] for t in transactions if not t["is_transfer"])
+# 残高検証ロジック（振替含む全取引を合計）
+amount_sum = sum(t["amount"] for t in transactions)
 balance_end_calc = balance_start + amount_sum
 discrepancy = balance_end_calc - balance_end_actual
 ```
+
+「複数口座を一括取得すると振替が結合される（片方が消える）」問題については、
+`request_cf_term_data_by_sub_account` で**口座ごとに個別クエリ**することで回避する。
+`verify_all_bank_accounts` もループで1口座ずつ呼ぶ設計のため問題なし。
+
+**集計（`summarize_transactions`）については別の話**：
+家計簿としての収支集計では口座間移動（振替）を除外するのが正しい（二重計上防止）。
+残高検証と集計でフィルタの扱いが異なる点に注意。
+
+**残高検証の前提**：
+- `balance_start` = 期間開始日の前日時点の残高（例: 2025年検証なら 2024/12/31 残高）
+- `balance_end_actual` = 期間終了日の最終取引後の残高（例: 2025/12/31 残高）
+- これらは `cf_term_data_by_sub_account` API のレスポンスから取得する（フィールド名は実行確認要）
 
 ---
 

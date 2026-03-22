@@ -542,9 +542,9 @@ def verify_account_balance(
     balance_end = result.get("balance_end")
     transactions = result.get("transactions", [])
 
-    # 振替を除いた取引の合計
-    non_transfer = [t for t in transactions if not t.get("is_transfer")]
-    transaction_sum = sum(t.get("amount", 0) or 0 for t in non_transfer)
+    # 銀行残高の観点では振替も実際の入出金なので全取引を合計する
+    # （振替除外すると残高がずれる。複数口座の二重計上問題は口座ごとに個別クエリすることで回避済み）
+    transaction_sum = sum(t.get("amount", 0) or 0 for t in transactions)
 
     if balance_start is None or balance_end is None:
         return {
@@ -553,7 +553,7 @@ def verify_account_balance(
             "date_to": date_to,
             "balance_start": balance_start,
             "balance_end_actual": balance_end,
-            "transaction_count": len(non_transfer),
+            "transaction_count": len(transactions),
             "transaction_sum": transaction_sum,
             "is_balanced": None,
             "note": "残高情報が取得できませんでした。cf_term_data API のレスポンスフィールド名を確認してください。",
@@ -575,7 +575,7 @@ def verify_account_balance(
         "balance_end_actual": balance_end,
         "balance_end_calculated": balance_end_calc,
         "discrepancy": discrepancy,
-        "transaction_count": len(non_transfer),
+        "transaction_count": len(transactions),
         "transaction_sum": transaction_sum,
         "is_balanced": is_balanced,
         "note": note,
