@@ -290,15 +290,11 @@ document.addEventListener('DOMContentLoaded', () => {
             content.textContent = act.content;
             const subContent = document.createElement('div');
             subContent.className = 'text-xs text-gray-500 truncate';
-            subContent.textContent = `${act.large_category} / ${act.middle_category}`;
+            subContent.textContent = act.memo
+                ? `${act.large_category} / ${act.middle_category}　📝 ${act.memo}`
+                : `${act.large_category} / ${act.middle_category}`;
             contentWrapper.appendChild(content);
             contentWrapper.appendChild(subContent);
-            if (act.memo) {
-                const memoEl = document.createElement('div');
-                memoEl.className = 'text-xs text-blue-400 truncate mt-0.5';
-                memoEl.textContent = act.memo;
-                contentWrapper.appendChild(memoEl);
-            }
 
             // Amount
             const amountWrapper = document.createElement('div');
