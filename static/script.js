@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isNew: 0,
         isOld: 0,
         isContinuous: 0,
+        hasMemo: 0,
+        memoKeyword: '',
         excludeLargeIds: new Set(),
         excludeMiddleIds: new Set(),
         isEditing: false,
@@ -39,6 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
         filterIsNew: document.getElementById('filter-is-new'),
         filterIsOld: document.getElementById('filter-is-old'),
         filterIsContinuous: document.getElementById('filter-is-continuous'),
+        filterHasMemo: document.getElementById('filter-has-memo'),
+        filterMemoKeyword: document.getElementById('filter-memo-keyword'),
         categoryList: document.getElementById('category-list'),
         excludeCategoryList: document.getElementById('exclude-category-list'),
         activeFilters: document.getElementById('active-filters'),
@@ -163,6 +167,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isNew) params.append('is_new', 1);
         if (state.isOld) params.append('is_old', 1);
         if (state.isContinuous) params.append('is_continuous', 1);
+        if (state.hasMemo) params.append('has_memo', 1);
+        if (state.memoKeyword) params.append('memo_keyword', state.memoKeyword);
         if (state.excludeLargeIds.size > 0) params.append('exclude_large', Array.from(state.excludeLargeIds).join(','));
         if (state.excludeMiddleIds.size > 0) params.append('exclude_middle', Array.from(state.excludeMiddleIds).join(','));
 
@@ -287,6 +293,12 @@ document.addEventListener('DOMContentLoaded', () => {
             subContent.textContent = `${act.large_category} / ${act.middle_category}`;
             contentWrapper.appendChild(content);
             contentWrapper.appendChild(subContent);
+            if (act.memo) {
+                const memoEl = document.createElement('div');
+                memoEl.className = 'text-xs text-blue-400 truncate mt-0.5';
+                memoEl.textContent = act.memo;
+                contentWrapper.appendChild(memoEl);
+            }
 
             // Amount
             const amountWrapper = document.createElement('div');
@@ -545,6 +557,8 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isNew = els.filterIsNew.checked ? 1 : 0;
         state.isOld = els.filterIsOld.checked ? 1 : 0;
         state.isContinuous = els.filterIsContinuous.checked ? 1 : 0;
+        state.hasMemo = els.filterHasMemo.checked ? 1 : 0;
+        state.memoKeyword = els.filterMemoKeyword.value.trim();
         
         // selectCategory is updated by radio change events
 
@@ -561,6 +575,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isNew) filters.push('新着');
         if (state.isOld) filters.push('既読');
         if (state.isContinuous) filters.push('連続');
+        if (state.hasMemo) filters.push('メモあり');
+        if (state.memoKeyword) filters.push(`メモ:${state.memoKeyword}`);
 
         filters.forEach(f => {
             const badge = document.createElement('span');

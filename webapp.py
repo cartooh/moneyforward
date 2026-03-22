@@ -50,6 +50,8 @@ def get_acts():
     is_new = request.args.get('is_new', type=int)
     is_old = request.args.get('is_old', type=int)
     is_continuous = request.args.get('is_continuous', type=int)
+    has_memo = request.args.get('has_memo', type=int)
+    memo_keyword = request.args.get('memo_keyword', '')
 
     # 除外フィルタ (カンマ区切りID)
     exclude_large = request.args.get('exclude_large', '')
@@ -74,7 +76,7 @@ def get_acts():
             )
 
             # user_asset_acts.py と同じヘッダー定義を使用
-            list_header = 'id is_transfer is_income is_target updated_at content amount large_category_id large_category middle_category_id middle_category account.service.service_name sub_account.sub_type sub_account.sub_name'.split()
+            list_header = 'id is_transfer is_income is_target updated_at content amount large_category_id large_category middle_category_id middle_category memo account.service.service_name sub_account.sub_type sub_account.sub_name'.split()
             
             rows = []
             # 共通関数を使用してデータを抽出
@@ -92,6 +94,10 @@ def get_acts():
                 if lid in exclude_large_ids:
                     continue
                 if mid in exclude_middle_ids:
+                    continue
+                if has_memo and not act.get('memo'):
+                    continue
+                if memo_keyword and memo_keyword not in (act.get('memo') or ''):
                     continue
                 filtered_acts.append(act)
             
