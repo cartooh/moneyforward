@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
         categorySearchClear: document.getElementById('category-search-clear'),
         categoryHistoryList: document.getElementById('category-history-list'),
         largeCategoryList: document.getElementById('large-category-list'),
+        largeCategorySectionHeader: document.getElementById('large-category-section-header'),
         middleCategoryList: document.getElementById('middle-category-list'),
         categoryModalClose: document.getElementById('category-modal-close'),
         categoryModalBack: document.getElementById('category-modal-back'),
@@ -82,25 +83,49 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Icon Mapping (Large Category ID -> FontAwesome Class)
-    // 仮の定義。必要に応じて修正してください。
     const iconMap = {
-        1: 'fa-utensils',          // 食費
-        2: 'fa-shopping-basket',   // 日用品
-        3: 'fa-tshirt',            // 衣服
-        4: 'fa-heartbeat',         // 健康・医療
-        5: 'fa-train',             // 交通費
-        6: 'fa-wifi',              // 通信費
-        7: 'fa-lightbulb',         // 水道・光熱費
-        8: 'fa-home',              // 住まい
-        9: 'fa-gamepad',           // 趣味・娯楽
-        10: 'fa-graduation-cap',   // 教養・教育
-        11: 'fa-users',            // 交際費
-        12: 'fa-gift',             // 特別な支出
-        13: 'fa-wallet',           // 現金・カード
-        14: 'fa-piggy-bank',       // 貯金
-        15: 'fa-money-bill-wave',  // 給与
-        16: 'fa-hand-holding-usd', // その他収入
-        17: 'fa-question-circle'   // 未分類
+        1:  'fa-exchange-alt',       // 収入
+        3:  'fa-wallet',             // 現金・カード
+        4:  'fa-home',               // 住宅
+        5:  'fa-faucet',             // 水道・光熱費
+        6:  'fa-wifi',               // 通信費
+        7:  'fa-car',                // 自動車
+        8:  'fa-briefcase-medical',  // 保険
+        9:  'fa-coins',              // 税・社会保障
+        10: 'fa-broom',              // 日用品
+        11: 'fa-utensils',           // 食費
+        12: 'fa-book',               // 教養・教育
+        13: 'fa-star',               // 趣味・娯楽
+        14: 'fa-tshirt',             // 衣服・美容
+        15: 'fa-plus',               // 健康・医療
+        16: 'fa-exclamation',        // 特別な支出
+        18: 'fa-ellipsis-h',         // その他
+        20: 'fa-train',              // 交通費
+        21: 'fa-users',              // 交際費
+        0:  'fa-question'            // 未分類
+    };
+
+    // Color Mapping (Large Category ID -> Tailwind bg + text classes)
+    const colorMap = {
+        1:  'bg-green-500 text-white',    // 収入
+        3:  'bg-yellow-500 text-white',   // 現金・カード
+        4:  'bg-green-600 text-white',    // 住宅
+        5:  'bg-sky-400 text-white',      // 水道・光熱費
+        6:  'bg-purple-500 text-white',   // 通信費
+        7:  'bg-gray-600 text-white',     // 自動車
+        8:  'bg-pink-400 text-white',     // 保険
+        9:  'bg-yellow-700 text-white',   // 税・社会保障
+        10: 'bg-emerald-500 text-white',  // 日用品
+        11: 'bg-red-500 text-white',      // 食費
+        12: 'bg-blue-500 text-white',     // 教養・教育
+        13: 'bg-pink-500 text-white',     // 趣味・娯楽
+        14: 'bg-orange-400 text-white',   // 衣服・美容
+        15: 'bg-orange-500 text-white',   // 健康・医療
+        16: 'bg-green-500 text-white',    // 特別な支出
+        18: 'bg-gray-400 text-white',     // その他
+        20: 'bg-gray-700 text-white',     // 交通費
+        21: 'bg-blue-600 text-white',     // 交際費
+        0:  'bg-orange-400 text-white'    // 未分類
     };
 
     const getIconClass = (id) => {
@@ -108,9 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const getCategoryColor = (id) => {
-        // 収入(ID:15, 16等)は青系、支出は赤系などの色分けも可能
-        // 今回はシンプルにアイコンのみ
-        return 'bg-red-500 text-white'; 
+        return colorMap[id] || 'bg-gray-400 text-white';
     };
 
     // --- API Calls ---
@@ -248,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Icon
             const iconWrapper = document.createElement('div');
-            iconWrapper.className = `flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center mr-3 ${act.is_income ? 'bg-blue-100 text-blue-500' : 'bg-red-100 text-red-500'}`;
+            iconWrapper.className = `flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center mr-3 ${getCategoryColor(act.large_category_id)}`;
             const icon = document.createElement('i');
             icon.className = `fas ${getIconClass(act.large_category_id)}`;
             iconWrapper.appendChild(icon);
@@ -576,6 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
         els.categoryModal.classList.add('hidden');
         // Reset view to main list
         els.largeCategoryList.classList.remove('hidden');
+        els.largeCategorySectionHeader?.classList.remove('hidden');
         els.middleCategoryList.classList.add('hidden');
         els.categoryModalBack.classList.add('hidden');
         els.categoryHistoryList.parentElement.classList.remove('hidden'); // Show history container
@@ -612,16 +636,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderLargeCategories = () => {
         els.largeCategoryList.innerHTML = '';
         state.allCategories.forEach(cat => {
+            const midNames = (cat.middle_categories || []).map(m => m.name).join(' ');
+            const midPreview = midNames.length > 30 ? midNames.slice(0, 30) + '…' : midNames;
             const btn = document.createElement('button');
-            btn.className = 'w-full flex items-center justify-between p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left';
+            btn.className = 'w-full flex items-center justify-between px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left';
             btn.innerHTML = `
-                <div class="flex items-center">
-                    <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-3">
-                        <i class="fas ${getIconClass(cat.id)} text-gray-500"></i>
+                <div class="flex items-center flex-1 min-w-0">
+                    <div class="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center mr-3 ${getCategoryColor(cat.id)}">
+                        <i class="fas ${getIconClass(cat.id)}"></i>
                     </div>
-                    <span class="text-gray-900 font-medium">${cat.name}</span>
+                    <div class="min-w-0">
+                        <div class="text-gray-900 font-medium">${cat.name}</div>
+                        <div class="text-xs text-gray-400 truncate">${midPreview}</div>
+                    </div>
                 </div>
-                <i class="fas fa-chevron-right text-gray-300"></i>
+                <i class="fas fa-chevron-right text-gray-300 flex-shrink-0 ml-2"></i>
             `;
             btn.addEventListener('click', () => {
                 showMiddleCategories(cat);
@@ -632,6 +661,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const showMiddleCategories = (largeCategory) => {
         els.largeCategoryList.classList.add('hidden');
+        els.largeCategorySectionHeader?.classList.add('hidden');
         els.categoryHistoryList.parentElement.classList.add('hidden'); // Hide history
         els.middleCategoryList.classList.remove('hidden');
         els.categoryModalBack.classList.remove('hidden');
@@ -659,6 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!keyword) {
             // Reset to initial state
             els.largeCategoryList.classList.remove('hidden');
+            els.largeCategorySectionHeader?.classList.remove('hidden');
             els.middleCategoryList.classList.add('hidden');
             els.categoryHistoryList.parentElement.classList.remove('hidden');
             els.categoryModalBack.classList.add('hidden');
@@ -668,6 +699,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Search mode: Show flattened list of matches
         els.largeCategoryList.classList.add('hidden');
+        els.largeCategorySectionHeader?.classList.add('hidden');
         els.categoryHistoryList.parentElement.classList.add('hidden');
         els.middleCategoryList.classList.remove('hidden');
         els.categoryModalBack.classList.add('hidden'); // No back button in search mode (clear search to go back)

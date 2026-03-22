@@ -123,11 +123,14 @@
     <!-- Category Selection Modal (Full Screen) -->
     <div id="category-modal" class="fixed inset-0 bg-white z-[60] hidden flex flex-col">
         <!-- Header -->
-        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
-            <button id="category-modal-back" class="text-blue-600 font-medium hidden">
-                <i class="fas fa-chevron-left mr-1"></i>戻る
+        <div class="relative flex items-center justify-center px-4 py-3 border-b border-gray-200 bg-white">
+            <button id="category-modal-back" class="absolute left-4 text-blue-600 font-medium hidden">
+                <i class="fas fa-chevron-left mr-1"></i>
             </button>
-            <button id="category-modal-close" class="text-blue-600 font-medium" style="margin-left: auto;">キャンセル</button>
+            <h2 id="category-modal-title" class="font-bold text-base">カテゴリを選択</h2>
+            <button id="category-modal-close" class="absolute right-4 text-gray-500">
+                <i class="fas fa-times text-lg"></i>
+            </button>
         </div>
         
         <!-- Search -->
@@ -143,9 +146,12 @@
         <div class="flex-1 overflow-y-auto">
             <!-- History Section -->
             <div id="category-history-section">
-                <div class="px-4 py-2 bg-gray-50 text-xs font-bold text-gray-500">最近使用したカテゴリ</div>
+                <div class="px-4 py-2 bg-gray-100 text-xs font-bold text-gray-500">よく使うカテゴリ</div>
                 <div id="category-history-list" class="flex flex-wrap p-2"></div>
             </div>
+
+            <!-- Section Header -->
+            <div id="large-category-section-header" class="px-4 py-2 bg-gray-100 text-xs font-bold text-gray-500">カテゴリ一覧</div>
 
             <!-- Main List -->
             <div id="large-category-list"></div>
