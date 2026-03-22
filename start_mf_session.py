@@ -18,6 +18,8 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-s', '--service', default='moneyforward')
@@ -39,13 +41,24 @@ driver = webdriver.Chrome(options=options)
 
 driver.get('https://moneyforward.com/sign_in')
 
-text_box = driver.find_element(by=By.NAME, value="mfid_user[email]")
+text_box = WebDriverWait(driver, 10).until(
+    EC.element_to_be_clickable((By.NAME, "mfid_user[email]"))
+)
 text_box.send_keys(username)
 text_box.submit()
 
-text_box = driver.find_element(by=By.NAME, value="mfid_user[password]")
+text_box = WebDriverWait(driver, 10).until(
+    EC.element_to_be_clickable((By.NAME, "mfid_user[password]"))
+)
 text_box.send_keys(password)
 text_box.submit()
+
+try:
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.NAME, "email_otp"))
+    )
+except:
+    pass  # OTP不要なフローではタイムアウトしてそのまま続行
 
 while True:
     current_url = urlparse(driver.current_url)
