@@ -2,11 +2,13 @@
 # -*- coding: utf-8 -*-
 
 import json
+import logging
 import requests
 from bs4 import BeautifulSoup
 from contextlib import contextmanager
-from pprint import pprint
 import pickle
+
+logger = logging.getLogger(__name__)
 
 
 def request_category(s):
@@ -49,7 +51,7 @@ def change_default_group(s):
     """
     sub_account_groups = request_sub_account_groups(s)
     if 'current_group_id_hash' not in sub_account_groups:
-        print(f"Not Found current_group_id_hash in sub_account_groups: {sub_account_groups}")
+        logger.warning("Not Found current_group_id_hash in sub_account_groups: %s", sub_account_groups)
     current_group_id_hash = sub_account_groups['current_group_id_hash']
     request_change_group(s)
     
@@ -199,11 +201,11 @@ def get_csrf_token(s):
             
     # Debug info if not found
     if metas:
-        print(f"Found {len(metas)} csrf-token meta tags, but none had content attribute.")
+        logger.warning("Found %d csrf-token meta tags, but none had content attribute.", len(metas))
         for m in metas:
-            print(f" - {m}")
+            logger.warning(" - %s", m)
     else:
-        print("No csrf-token meta tag found.")
+        logger.warning("No csrf-token meta tag found.")
         
     raise ValueError("CSRF token not found")
 
@@ -252,7 +254,7 @@ def request_update_user_asset_act(s, csrf_token, id_,
     r = s.put(url, params, headers=headers)
     is_ok = r.status_code == 200
     if not is_ok:
-        print(r.status_code, r.text)
+        logger.warning("%s %s", r.status_code, r.text)
 
 
 def request_update_change_type(s, csrf_token, id_, change_type):
@@ -275,7 +277,7 @@ def request_update_change_type(s, csrf_token, id_, change_type):
     r = s.put(url, params, headers=headers)
     is_ok = r.status_code == 200
     if not is_ok:
-        print(r.status_code, r.text)
+        logger.warning("%s %s", r.status_code, r.text)
 
 
 def request_change_transfer(s, id, partner_account_id_hash="0", partner_sub_account_id_hash="0", partner_act_id=None):
@@ -296,7 +298,7 @@ def request_change_transfer(s, id, partner_account_id_hash="0", partner_sub_acco
         params['partner_act_id'] = partner_act_id
     r = s.post(url, json.dumps(params), headers={'Content-Type': 'application/json'})
     if r.status_code != requests.codes.ok:
-        print(r.status_code, r.text)
+        logger.warning("%s %s", r.status_code, r.text)
 
 
 def request_clear_transfer(s, id):
@@ -312,7 +314,7 @@ def request_clear_transfer(s, id):
     params = dict(id=id)
     r = s.post(url, json.dumps(params), headers={'Content-Type': 'application/json'})
     if r.status_code != requests.codes.ok:
-        print(r.status_code, r.text)
+        logger.warning("%s %s", r.status_code, r.text)
 
 
 def request_user_asset_act_by_id(s, id):
@@ -374,11 +376,11 @@ def request_user_asset_acts(s,
     
     user_asset_acts = s.get("https://moneyforward.com/sp2/user_asset_acts", params=params).json()
     if 'messages' in user_asset_acts:
-        pprint(user_asset_acts)
+        logger.warning("user_asset_acts error: %s", user_asset_acts)
         raise ValueError(user_asset_acts['messages'])
-    
+
     if 'error' in user_asset_acts:
-        pprint(user_asset_acts)
+        logger.warning("user_asset_acts error: %s", user_asset_acts)
         raise ValueError(user_asset_acts['error'])
     
     return user_asset_acts
@@ -410,7 +412,7 @@ def request_change_group(s, group_id_hash="0"):
     params = dict(group_id_hash=group_id_hash)
     r = s.post(url, json.dumps(params), headers={'Content-Type': 'application/json'})
     if r.status_code != requests.codes.ok:
-        print(r.status_code, r.text)
+        logger.warning("%s %s", r.status_code, r.text)
 
 
 def request_manual_user_asset_act_partner_sources(s, act_id):
@@ -444,12 +446,12 @@ def request_transactions_category_bulk_updates(s, large_category_id, middle_cate
         ids: 取引IDのリスト
     """
     if any(id < 0 for id in ids):
-        print("Filtered invalid ids")
+        logger.warning("Filtered invalid ids")
         ids = [id for id in ids if id > 0]
-        
+
     if not ids:
-        print("ids is empty")
-        return 
+        logger.warning("ids is empty")
+        return
 
     url = 'https://moneyforward.com/sp2/transactions_category_bulk_updates'
     n = 100
@@ -461,7 +463,7 @@ def request_transactions_category_bulk_updates(s, large_category_id, middle_cate
         )
         r = s.put(url, json.dumps(params), headers={'Content-Type': 'application/json'})
         if r.status_code != requests.codes.ok:
-            print(r.status_code, r.text)
+            logger.warning("%s %s", r.status_code, r.text)
 
 @contextmanager
 def session_from_cookie_file(cookie_file='mf_cookies.pkl'):

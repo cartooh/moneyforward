@@ -25,11 +25,7 @@ Claude Desktop 設定 (%%APPDATA%%/Claude/claude_desktop_config.json):
     }
 """
 
-# MCP は stdio でJSON通信するため、moneyforward_api.py の print() が
-# stdout に出るとプロトコルが壊れる。先頭で stderr にリダイレクトする。
 import sys
-sys.stdout = sys.stderr
-
 import os
 import logging
 from datetime import datetime, timedelta
